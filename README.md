@@ -1,13 +1,19 @@
-# Billy's Debug Tools
+# Billy's Mod infrastructure
 
-一个通用的 Minecraft 1.20.1 Fabric **客户端**调试工具模组。
+一个通用的 Minecraft 1.20.1 Fabric **客户端**基础设施模组（mod id：`billy-inf`）。
 
-提供统一的调试扩展框架：
+按子模块组织，目前包含 **debugger（调试子模块）**：
 
 - **Action** —— 一次性执行的调试动作
 - **Feature** —— 可开关、状态持久化的调试特性
 
 两者均以 `Identifier` 为唯一标识，通过命令与配置界面统一管理。
+
+## 子模块（submodules）
+
+| 子模块 | 定位 |
+| --- | --- |
+| `debugger` | Billy's Debug Tools —— 调试动作与特性框架 |
 
 ## 独立运行
 
@@ -23,23 +29,24 @@
 
 ## 命令
 
-根命令 `/bdt`，别名 `/billysdebugtools`。
+根命令 `/inf`（亦可写作 `/billy-inf:inf`）。
 
 | 命令 | 说明 |
 | --- | --- |
-| `/bdt action run <id> [args...]` | 执行调试动作 |
-| `/bdt action info <id>` | 查看动作元信息 |
-| `/bdt feat about <id>` | 查询调试特性状态 |
-| `/bdt feat enable\|disable <id>` | 启用 / 禁用调试特性 |
-| `/bdt list` | 列出全部已注册动作与特性 |
-| `/bdt gui` | 打开配置界面 |
+| `/inf dbg action run <id> [args...]` | 执行调试动作 |
+| `/inf dbg action info <id>` | 查看动作元信息 |
+| `/inf dbg feat about <id>` | 查询调试特性状态 |
+| `/inf dbg feat enable\|disable <id>` | 启用 / 禁用调试特性 |
+| `/inf dbg list` | 列出全部已注册动作与特性 |
+| `/inf dbg gui` | 打开配置界面 |
+| `/inf info` | 显示模组版本与子模块清单 |
 
 ## 配置
 
-配置界面可从 ModMenu 的「设置」按钮或 `/bdt gui` 进入，包含两个分类：
+配置界面可从 ModMenu 的「设置」按钮或 `/inf dbg gui` 进入，包含两个分类：
 
-- **通用设置** —— 持久化到 `config/bdt.json`
-- **调试特性** —— 持久化到 `config/bdt-features.json`
+- **通用设置** —— 持久化到 `config/billy-inf.json`
+- **调试特性** —— 持久化到 `config/billy-inf-features.json`
 
 ## 构建
 

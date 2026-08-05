@@ -1,25 +1,25 @@
 {
 	"schemaVersion": 1,
-	"id": "bdt",
+	"id": "billy-inf",
 	"version": "${version}",
-	"name": "Billy's Debug Tools",
-	"description": "A general-purpose client-side debugging toolkit. Provides a unified framework of debug actions and toggleable debug features, with built-in component packs that activate only when their target mod is present.",
+	"name": "Billy's Mod infrastructure",
+	"description": "A general-purpose client-side infrastructure mod. Ships a debug submodule (debug actions and toggleable debug features) that activates built-in component packs only when their target mod is present.",
 	"authors": [
 		"billy65536"
 	],
 	"contact": {
-		"homepage": "https://github.com/dx122dx/bdt",
-        "sources": "https://github.com/dx122dx/bdt"
+		"homepage": "https://github.com/dx122dx/billy-inf",
+        "sources": "https://github.com/dx122dx/billy-inf"
 	},
 	"license": "AGPL-3.0-only",
-	"icon": "assets/bdt/icon.png",
+	"icon": "assets/billy-inf/icon.png",
 	"environment": "client",
 	"entrypoints": {
 		"client": [
-			"com.billy65536.debugger.BdtMod"
+			"com.billy65536.infrastructure.InfMod"
 		],
 		"modmenu": [
-			"com.billy65536.debugger.integration.ModMenuIntegration"
+			"com.billy65536.infrastructure.debugger.integration.ModMenuIntegration"
 		]
 	},
 	"depends": {
@@ -34,7 +34,6 @@
 		"chunkscanner": ">=1.1.0-dev-20260805.1"
 	},
 	"mixins": [
-		"bdt.mixins.json",
-		"bdt-chunkscanner.mixins.json"
+		"debugger.chunkscanner.mixins.json"
 	]
 }
