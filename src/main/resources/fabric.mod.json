@@ -16,6 +16,9 @@
 	"entrypoints": {
 		"client": [
 			"com.billy65536.chunkscanner.debugger.CsDebuggerMod"
+		],
+		"modmenu": [
+			"com.billy65536.chunkscanner.debugger.integration.ModMenuIntegration"
 		]
 	},
 	"depends": {
@@ -25,5 +28,8 @@
 		"fabric-api": "*",
 		"cloth-config": "*",
 		"chunkscanner": ">=1.1.0-dev-20260805.1"
+	},
+	"suggests": {
+		"modmenu": "*"
 	}
 }

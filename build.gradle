@@ -68,6 +68,9 @@ dependencies {
 		exclude(group: "net.fabricmc.fabric-api")
 	}
 
+	// ModMenu 为可选依赖：仅编译期需要 API，运行时缺失不影响功能
+	modCompileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+
 	// Chunk Scanner — 引用核心 API（如 IChunkDb.FactoryRegistry 工厂模式加载数据库）
 	// 版本号自动复用 ../chunkscanner/gradle.properties 的 mod_version
 	modImplementation "${project.chunkscanner_group}:${project.chunkscanner_artifact}:${project.chunkscanner_version}"

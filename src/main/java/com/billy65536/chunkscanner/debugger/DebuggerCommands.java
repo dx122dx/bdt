@@ -30,10 +30,11 @@ import net.minecraft.util.Identifier;
  *
  * <p>提供的子命令：</p>
  * <ul>
- *   <li>{@code /cs dbg action <id> [args...]} —— 执行调试动作</li>
- *   <li>{@code /cs dbg feat <id> [enable|disable]} —— 查询/切换调试特性</li>
+ *   <li>{@code /cs dbg action run <id> [args...]} —— 执行调试动作</li>
+ *   <li>{@code /cs dbg feat about <id>} —— 查询调试特性的启用状态</li>
+ *   <li>{@code /cs dbg feat enable|disable <id>} —— 启用/禁用调试特性</li>
+ *   <li>{@code /cs dbg feat gui} —— 打开特性开关配置界面</li>
  *   <li>{@code /cs dbg list} —— 列出全部已注册项</li>
- *   <li>{@code /cs dbg gui} —— 打开特性开关配置界面</li>
  * </ul>
  */
 public final class DebuggerCommands {
@@ -78,8 +79,9 @@ public final class DebuggerCommands {
         var root = ClientCommandManager.literal(rootName);
         var dbgNode = ClientCommandManager.literal("dbg");
 
-        // ===== /cs dbg action <id> [args...] =====
-        dbgNode.then(ClientCommandManager.literal("action")
+        // ===== /cs dbg action run <id> [args...] =====
+        var actionNode = ClientCommandManager.literal("action");
+        actionNode.then(ClientCommandManager.literal("run")
                 .then(ClientCommandManager.argument("id", StringArgumentType.string())
                         .suggests(ACTION_ID_SUGGESTIONS)
                         // 带参数形式：args 用 greedyString 整串接收后再做引号感知分词
@@ -93,34 +95,47 @@ public final class DebuggerCommands {
                                 ctx.getSource().getClient(),
                                 StringArgumentType.getString(ctx, "id"),
                                 null))));
+        dbgNode.then(actionNode);
 
-        // ===== /cs dbg feat <id> [enable|disable] =====
-        dbgNode.then(ClientCommandManager.literal("feat")
-                .then(ClientCommandManager.argument("id", StringArgumentType.string())
-                        .suggests(FEATURE_ID_SUGGESTIONS)
-                        .then(ClientCommandManager.literal("enable")
-                                .executes(ctx -> setFeature(
-                                        ctx.getSource().getClient(),
-                                        StringArgumentType.getString(ctx, "id"), true)))
-                        .then(ClientCommandManager.literal("disable")
-                                .executes(ctx -> setFeature(
-                                        ctx.getSource().getClient(),
-                                        StringArgumentType.getString(ctx, "id"), false)))
-                        // 不带 enable/disable 时仅显示当前状态
-                        .executes(ctx -> showFeature(
-                                ctx.getSource().getClient(),
-                                StringArgumentType.getString(ctx, "id")))));
+        // ===== /cs dbg feat about|enable|disable <id> + feat gui =====
+        var featNode = ClientCommandManager.literal("feat");
+        featNode.then(featIdNode("about",
+                (client, id) -> showFeature(client, id)));
+        featNode.then(featIdNode("enable",
+                (client, id) -> setFeature(client, id, true)));
+        featNode.then(featIdNode("disable",
+                (client, id) -> setFeature(client, id, false)));
+        featNode.then(ClientCommandManager.literal("gui")
+                .executes(ctx -> openGui(ctx.getSource().getClient())));
+        dbgNode.then(featNode);
 
         // ===== /cs dbg list =====
         dbgNode.then(ClientCommandManager.literal("list")
                 .executes(ctx -> listAll(ctx.getSource().getClient())));
 
-        // ===== /cs dbg gui =====
-        dbgNode.then(ClientCommandManager.literal("gui")
-                .executes(ctx -> openGui(ctx.getSource().getClient())));
-
         root.then(dbgNode);
         return root;
+    }
+
+    /**
+     * 构建 {@code <literal> <id>} 形式的特性子命令节点。
+     *
+     * <p>about / enable / disable 三者结构一致，仅执行逻辑不同，抽出以避免重复。</p>
+     */
+    private static LiteralArgumentBuilder<FabricClientCommandSource> featIdNode(
+            String literal, FeatureCommand command) {
+        return ClientCommandManager.literal(literal)
+                .then(ClientCommandManager.argument("id", StringArgumentType.string())
+                        .suggests(FEATURE_ID_SUGGESTIONS)
+                        .executes(ctx -> command.execute(
+                                ctx.getSource().getClient(),
+                                StringArgumentType.getString(ctx, "id"))));
+    }
+
+    /** 特性子命令的执行逻辑，返回值即命令返回码。 */
+    @FunctionalInterface
+    private interface FeatureCommand {
+        int execute(MinecraftClient client, String idArg);
     }
 
     // ==================== 命令执行 ====================
