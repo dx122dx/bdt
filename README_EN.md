@@ -210,7 +210,7 @@ sh ./gradlew build
 
 Artifacts land in `build/libs/billy-inf-<version>.jar`.
 
-- Version is `mod_version` in `gradle.properties`, format `date.sequence` (e.g. `20260805.17`).
+- Version uses **Semantic Versioning (SemVer)**, e.g. `0.1.0` / `1.0.0` / `1.0.0-beta.1`. Publishing is driven by **git tags**: when you push a tag like `v1.0.0`, CI automatically injects the tag (without the `v` prefix) into `gradle.properties`' `mod_version` and then builds & publishes — no manual version editing needed.
 - Compiled at Java 17 (`--release 17`).
 - Dependencies resolve via `flatDir` / Maven repositories; Fabric API and Cloth Config are required at runtime, `modmenu` is compile-time optional.
 

@@ -210,7 +210,7 @@ sh ./gradlew build
 
 产物位于 `build/libs/billy-inf-<version>.jar`。
 
-- 版本号在 `gradle.properties` 的 `mod_version`，格式 `日期.当日序号`（如 `20260805.17`）。
+- 版本号采用**语义化版本（SemVer）**，如 `0.1.0` / `1.0.0` / `1.0.0-beta.1`。发布以 **git tag** 为唯一真相源：推送形如 `v1.0.0` 的 tag 时，CI 自动把 tag（去掉 `v` 前缀）注入 `gradle.properties` 的 `mod_version` 后再构建发布，无需手动改版本号。
 - 编译级别 Java 17（`--release 17`）。
 - 依赖通过 `flatDir` / Maven 仓库解析；Fabric API、Cloth Config 为运行时必需，`modmenu` 为编译期可选。
 
