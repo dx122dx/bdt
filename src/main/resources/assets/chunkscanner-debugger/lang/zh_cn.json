@@ -34,5 +34,9 @@
     "chunkscanner-debugger.action.csConfigurationLockerSetAuthorized.name": "模拟授权配置",
     "chunkscanner-debugger.action.csConfigurationLockerSetAuthorized.desc": "调用 ConfigurationLocker.setAuthorized，按给定路径解除锁定，模拟服务器已授权。可一次传入多个路径。",
     "chunkscanner-debugger.action.csConfigurationLockerSetLocked.name": "模拟锁定配置",
-    "chunkscanner-debugger.action.csConfigurationLockerSetLocked.desc": "调用 ConfigurationLocker.setLocked，按 路径=值 锁定并立即强制重放。省略值表示仅锁定无强制值。"
+    "chunkscanner-debugger.action.csConfigurationLockerSetLocked.desc": "调用 ConfigurationLocker.setLocked，按 路径=值 锁定并立即强制重放。省略值表示仅锁定无强制值。",
+    "chunkscanner-debugger.action.csConfigurationLockerEnterServer.name": "模拟进入服务器",
+    "chunkscanner-debugger.action.csConfigurationLockerEnterServer.desc": "调用 ConfigurationLocker.enterServerLock，按默认受保护配置进行锁定（等待授权状态）。无参数。",
+    "chunkscanner-debugger.action.csConfigurationLockerLeaveServer.name": "模拟离开服务器",
+    "chunkscanner-debugger.action.csConfigurationLockerLeaveServer.desc": "调用 ConfigurationLocker.leaveServerLock，清空全部锁定登记、恢复自由配置。无参数。"
 }

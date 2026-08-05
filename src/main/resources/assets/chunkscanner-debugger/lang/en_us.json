@@ -34,5 +34,9 @@
     "chunkscanner-debugger.action.csConfigurationLockerSetAuthorized.name": "Simulate Cofig Authorization",
     "chunkscanner-debugger.action.csConfigurationLockerSetAuthorized.desc": "Calls ConfigurationLocker.setAuthorized to unlock the given paths, simulating server authorization. Accepts multiple paths at once.",
     "chunkscanner-debugger.action.csConfigurationLockerSetLocked.name": "Simulate Config Lock",
-    "chunkscanner-debugger.action.csConfigurationLockerSetLocked.desc": "Calls ConfigurationLocker.setLocked to lock and immediately replay path=value. Omitting the value means lock without a forced value."
+    "chunkscanner-debugger.action.csConfigurationLockerSetLocked.desc": "Calls ConfigurationLocker.setLocked to lock and immediately replay path=value. Omitting the value means lock without a forced value.",
+    "chunkscanner-debugger.action.csConfigurationLockerEnterServer.name": "Simulate Enter Server",
+    "chunkscanner-debugger.action.csConfigurationLockerEnterServer.desc": "Calls ConfigurationLocker.enterServerLock to lock the default protected config (awaiting authorization). No arguments.",
+    "chunkscanner-debugger.action.csConfigurationLockerLeaveServer.name": "Simulate Leave Server",
+    "chunkscanner-debugger.action.csConfigurationLockerLeaveServer.desc": "Calls ConfigurationLocker.leaveServerLock to clear all lock entries and restore free config. No arguments."
 }

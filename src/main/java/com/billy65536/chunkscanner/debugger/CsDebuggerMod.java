@@ -8,6 +8,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.billy65536.chunkscanner.debugger.builtin.lock.DisableApplyAllFeature;
+import com.billy65536.chunkscanner.debugger.builtin.lock.EnterServerAction;
+import com.billy65536.chunkscanner.debugger.builtin.lock.LeaveServerAction;
 import com.billy65536.chunkscanner.debugger.builtin.lock.SetAuthorizedAction;
 import com.billy65536.chunkscanner.debugger.builtin.lock.SetLockedAction;
 import com.billy65536.chunkscanner.debugger.builtin.lock.UnlockAllFeature;
@@ -51,9 +53,11 @@ public class CsDebuggerMod implements ClientModInitializer {
 		// Feature：解锁全部 / 禁用 applyAll（实际拦截逻辑由 Mixin 注入 ConfigurationLocker）
 		FeatureRegistry.register(new UnlockAllFeature());
 		FeatureRegistry.register(new DisableApplyAllFeature());
-		// Action：模拟授权 / 模拟锁定（直接调用 ConfigurationLocker 静态方法）
+		// Action：模拟授权 / 模拟锁定 / 进入服务器 / 离开服务器（直接调用 ConfigurationLocker 静态方法）
 		ActionRegistry.register(new SetAuthorizedAction());
 		ActionRegistry.register(new SetLockedAction());
+		ActionRegistry.register(new EnterServerAction());
+		ActionRegistry.register(new LeaveServerAction());
 
 		// 注册命令。Brigadier 对同名根 literal 执行子节点合并而非覆盖，
 		// 因此 dbg 分支会自动挂到主模组已建立的命令树上，主模组无需改动。
