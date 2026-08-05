@@ -1,13 +1,15 @@
 package com.billy65536.infrastructure.debugger;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
 import java.util.function.Supplier;
 
+import com.billy65536.infrastructure.core.cli.ArgTokenizer;
+import com.billy65536.infrastructure.core.cli.CliCompletion;
 import com.billy65536.infrastructure.debugger.config.DebugToolsConfigScreen;
 import com.billy65536.infrastructure.debugger.config.DebuggerConfigLoader;
 import com.billy65536.infrastructure.debugger.core.action.ActionRegistry;
-import com.billy65536.infrastructure.debugger.core.action.ArgTokenizer;
 import com.billy65536.infrastructure.debugger.core.action.IDebugAction;
 import com.billy65536.infrastructure.debugger.core.feature.FeatureRegistry;
 import com.billy65536.infrastructure.debugger.core.feature.IDebugFeature;
@@ -15,7 +17,6 @@ import com.billy65536.infrastructure.InfrastructureMod;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
-import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
@@ -76,44 +77,20 @@ public final class DebuggerCommands {
 
     /**
      * 动作参数节点的补全器：先按已输入的 id 找到对应动作，再委托其
-     * {@link IDebugAction#suggest} 提供候选，最后按正在输入片段做前缀过滤。
+     * {@link IDebugAction#suggest} 提供下一参数的候选。交由 {@link CliCompletion}
+     * 的位置模式负责「只替换正在输入的片段、不覆盖已输入参数、空白后循环」等逻辑。
      * 动作未注册或无候选时退化为无补全。
      */
     private static final SuggestionProvider<FabricClientCommandSource> ACTION_ARGS_SUGGESTIONS =
-            (ctx, builder) -> {
-                Identifier rawId = ctx.getArgument("id", Identifier.class);
-                IDebugAction action = ActionRegistry.get(normalizeIdentifier(rawId));
-                if (action == null) {
-                    return builder.buildFuture();
-                }
-                // builder.getRemaining() 即 args 参数已输入的全部文本。
-                // 按最后一个空白切分：其后是正在输入的片段，其前是已完成的参数。
-                // （不能用 "input 长度减 remaining 长度" 去截取，那恒等于 remaining 本身，
-                //   会把整串当成「已完成参数」传给动作，参数位判断全错。）
-                String typed = builder.getRemaining();
-                int lastWs = lastIndexOfWhitespace(typed);
-                String fragment = (lastWs < 0) ? typed : typed.substring(lastWs + 1);
-                String[] completed = ArgTokenizer.tokenize(lastWs < 0 ? "" : typed.substring(0, lastWs));
-
-                // 只替换正在输入的片段，否则候选会覆盖掉此前已输入的参数
-                SuggestionsBuilder target =
-                        builder.createOffset(builder.getInput().length() - fragment.length());
-                String lower = fragment.toLowerCase(Locale.ROOT);
-                for (String candidate : action.suggest(ctx.getSource().getClient(), completed)) {
-                    if (candidate.toLowerCase(Locale.ROOT).startsWith(lower)) {
-                        target.suggest(candidate);
-                    }
-                }
-                return target.buildFuture();
-            };
-
-    /** 最后一个空白字符的下标；不含空白返回 -1。 */
-    private static int lastIndexOfWhitespace(String s) {
-        for (int i = s.length() - 1; i >= 0; i--) {
-            if (Character.isWhitespace(s.charAt(i))) return i;
-        }
-        return -1;
-    }
+            CliCompletion.builder()
+                    .multiple(true)
+                    .positional((ctx, completed) -> {
+                        Identifier rawId = ctx.getArgument("id", Identifier.class);
+                        IDebugAction action = ActionRegistry.get(normalizeIdentifier(rawId));
+                        if (action == null) return List.of();
+                        return action.suggest(ctx.getSource().getClient(), completed);
+                    })
+                    .build();
 
     // ==================== 命令构建 ====================
 

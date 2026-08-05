@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+import com.billy65536.infrastructure.core.cli.ArgParser;
+import com.billy65536.infrastructure.core.cli.CliCompletion;
 import com.billy65536.infrastructure.core.module.IModule;
 import com.billy65536.infrastructure.core.module.ModuleCommandRegistrar;
 import com.billy65536.infrastructure.core.module.ModuleConfigReflectionAccessor;
@@ -11,12 +13,14 @@ import com.billy65536.infrastructure.core.module.ModuleRegistry;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
-import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.command.argument.IdentifierArgumentType;
+import net.minecraft.util.Identifier;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
@@ -27,7 +31,7 @@ import net.minecraft.util.Formatting;
  * <p>根命令为 {@code /inf}（亦可作为 {@code /billy-inf:inf} 调用，两者等价）。
  * 提供以下子命令：</p>
  * <ul>
- *   <li>{@code config} —— 模块配置统一访问（{@code get|set|reset <moduleId:path>}）</li>
+ *   <li>{@code config} —— 模块配置统一访问（{@code get|set|reset <module> <path|assignments>}）</li>
  *   <li>{@code info} —— 显示模组自身信息及全部已注册模块概览 / 指定模块详情</li>
  *   <li>各模块通过 {@link ModuleCommandRegistrar} 登记的命令节点（如 debugger 的 {@code /inf dbg}）</li>
  * </ul>
@@ -57,59 +61,52 @@ public final class InfrastructureCommands {
     private static LiteralArgumentBuilder<FabricClientCommandSource> buildConfigCommand() {
         var config = ClientCommandManager.literal("config");
 
-        // /inf config get <moduleId:path>
+        // /inf config get <module:Identifier> <path:greedyString>
+        // 参考 debugger 的「IdentifierArgumentType + greedyString」结构：模块以 Identifier 标识，
+        // 路径作为自由串（配置字段名含大写，不能整体作为 Identifier，故路径用 greedy 接收）。
         config.then(ClientCommandManager.literal("get")
-                .then(ClientCommandManager.argument("target", StringArgumentType.greedyString())
-                        .suggests(CONFIG_PATH_SUGGESTIONS)
-                        .executes(ctx -> configGet(ctx.getSource().getClient(),
-                                StringArgumentType.getString(ctx, "target")))));
+                .then(ClientCommandManager.argument("module", IdentifierArgumentType.identifier())
+                        .suggests(MODULE_ID_SUGGESTIONS)
+                        .then(ClientCommandManager.argument("path", StringArgumentType.greedyString())
+                                .suggests(CONFIG_PATH_SUGGESTIONS)
+                                .executes(ctx -> configGet(ctx.getSource().getClient(),
+                                        moduleId(ctx, "module"),
+                                        StringArgumentType.getString(ctx, "path"))))));
 
-        // /inf config set <moduleId:path> <value>
-        // greedyString 会吞掉整行剩余输入，其后再挂参数节点将永远无法匹配（命令直接不可用），
-        // 因此用单个 greedy 参数同时接收「路径 + 值」，再按首个空白自行切分。
-        // 这样值中的空格也能原样保留（String 类型配置项需要）。
+        // /inf config set <module:Identifier> <assignments:greedyString>
+        // assignments 形如 [path=value ...]，可多条以空白分隔（多条批量设置）。
+        // 不再合并为单个 assignment 参数：分层补全与解析交由 core.cli 工具类完成。
         config.then(ClientCommandManager.literal("set")
-                .then(ClientCommandManager.argument("assignment", StringArgumentType.greedyString())
-                        .suggests(CONFIG_ASSIGNMENT_SUGGESTIONS)
-                        .executes(ctx -> configSetAssignment(
-                                ctx.getSource().getClient(),
-                                StringArgumentType.getString(ctx, "assignment")))));
+                .then(ClientCommandManager.argument("module", IdentifierArgumentType.identifier())
+                        .suggests(MODULE_ID_SUGGESTIONS)
+                        .then(ClientCommandManager.argument("assignments", StringArgumentType.greedyString())
+                                .suggests(CONFIG_ASSIGNMENT_SUGGESTIONS)
+                                .executes(ctx -> configSet(ctx.getSource().getClient(),
+                                        moduleId(ctx, "module"),
+                                        StringArgumentType.getString(ctx, "assignments"))))));
 
-        // /inf config reset <moduleId:path>
+        // /inf config reset <module:Identifier> <path:greedyString>
         config.then(ClientCommandManager.literal("reset")
-                .then(ClientCommandManager.argument("target", StringArgumentType.greedyString())
-                        .suggests(CONFIG_PATH_SUGGESTIONS)
-                        .executes(ctx -> configReset(ctx.getSource().getClient(),
-                                StringArgumentType.getString(ctx, "target")))));
+                .then(ClientCommandManager.argument("module", IdentifierArgumentType.identifier())
+                        .suggests(MODULE_ID_SUGGESTIONS)
+                        .then(ClientCommandManager.argument("path", StringArgumentType.greedyString())
+                                .suggests(CONFIG_PATH_SUGGESTIONS)
+                                .executes(ctx -> configReset(ctx.getSource().getClient(),
+                                        moduleId(ctx, "module"),
+                                        StringArgumentType.getString(ctx, "path"))))));
 
         return config;
     }
 
-    /** 将 {@code <moduleId:path>} 拆解为模块 id 与配置路径。按最后一个冒号分割。 */
-    private static String[] splitTarget(String target) {
-        if (target == null) return new String[] { "", "" };
-        int idx = target.lastIndexOf(':');
-        if (idx < 0) return new String[] { target, "" }; // 无冒号：整串当作 moduleId，path 留空
-        return new String[] { target.substring(0, idx), target.substring(idx + 1) };
+    /** 从命令上下文取出 {@code <module>} 参数对应的模块 id（裸名即取 path 部分）。 */
+    private static String moduleId(CommandContext<FabricClientCommandSource> ctx, String arg) {
+        return ctx.getArgument(arg, Identifier.class).getPath();
     }
 
-    /** 首个空白字符的下标；不含空白返回 -1。 */
-    private static int indexOfWhitespace(String s) {
-        for (int i = 0; i < s.length(); i++) {
-            if (Character.isWhitespace(s.charAt(i))) return i;
-        }
-        return -1;
-    }
-
-    /** 把 {@code <moduleId:path> <value>} 整串切分后转发给 {@link #configSet}。 */
-    private static int configSetAssignment(net.minecraft.client.MinecraftClient client, String assignment) {
-        String trimmed = assignment == null ? "" : assignment.trim();
-        int sep = indexOfWhitespace(trimmed);
-        if (sep < 0) {
-            send(client, Text.translatable("billy-inf.msg.config_set_usage").formatted(Formatting.RED));
-            return 0;
-        }
-        return configSet(client, trimmed.substring(0, sep), trimmed.substring(sep + 1).stripLeading());
+    /** 从命令上下文取出 {@code <module>} 参数对应的模块实例；未找到或模块无配置返回 null。 */
+    private static IModule moduleOf(CommandContext<FabricClientCommandSource> ctx, String arg) {
+        String id = moduleId(ctx, arg);
+        return (id == null) ? null : ModuleRegistry.get(id);
     }
 
     /** 模块 id 为无命名空间的纯名称（如 {@code debugger}），原样使用；空值返回 null。 */
@@ -118,11 +115,8 @@ public final class InfrastructureCommands {
         return raw;
     }
 
-    private static int configGet(net.minecraft.client.MinecraftClient client, String target) {
-        String[] parts = splitTarget(target);
-        String moduleId = normalizeModuleId(parts[0]);
-        String path = parts[1];
-        IModule module = (moduleId == null) ? null : ModuleRegistry.get(moduleId);
+    private static int configGet(net.minecraft.client.MinecraftClient client, String moduleId, String path) {
+        IModule module = ModuleRegistry.get(normalizeModuleId(moduleId));
         if (module == null || module.getConfig() == null) {
             send(client, Text.translatable("billy-inf.msg.module_config_none",
                             moduleId == null ? "?" : moduleId)
@@ -153,11 +147,8 @@ public final class InfrastructureCommands {
         return 1;
     }
 
-    private static int configSet(net.minecraft.client.MinecraftClient client, String target, String value) {
-        String[] parts = splitTarget(target);
-        String moduleId = normalizeModuleId(parts[0]);
-        String path = parts[1];
-        IModule module = (moduleId == null) ? null : ModuleRegistry.get(moduleId);
+    private static int configSet(net.minecraft.client.MinecraftClient client, String moduleId, String assignments) {
+        IModule module = ModuleRegistry.get(normalizeModuleId(moduleId));
         if (module == null || module.getConfig() == null) {
             send(client, Text.translatable("billy-inf.msg.module_config_none",
                             moduleId == null ? "?" : moduleId)
@@ -165,34 +156,48 @@ public final class InfrastructureCommands {
             return 0;
         }
         Object config = module.getConfig();
-        if (!ModuleConfigReflectionAccessor.hasPath(config, path)) {
-            send(client, Text.translatable("billy-inf.msg.config_path_unknown",
-                            moduleId + ":" + path)
-                    .formatted(Formatting.RED));
+        // 用 core.cli.ArgParser 把整串解析为若干 key[=value] 条目，支持批量设置
+        List<ArgParser.Assignment> items = ArgParser.parseAssignments(assignments);
+        if (items.isEmpty()) {
+            send(client, Text.translatable("billy-inf.msg.config_set_usage").formatted(Formatting.RED));
             return 0;
         }
-        try {
-            Object old = ModuleConfigReflectionAccessor.getValue(config, path);
-            ModuleConfigReflectionAccessor.setValue(config, path, value);
+        int applied = 0;
+        for (ArgParser.Assignment a : items) {
+            if (!ModuleConfigReflectionAccessor.hasPath(config, a.key)) {
+                send(client, Text.translatable("billy-inf.msg.config_path_unknown",
+                                moduleId + ":" + a.key)
+                        .formatted(Formatting.RED));
+                continue;
+            }
+            if (!a.hasValue) {
+                send(client, Text.translatable("billy-inf.msg.config_set_need_value",
+                                moduleId + ":" + a.key)
+                        .formatted(Formatting.RED));
+                continue;
+            }
+            try {
+                Object old = ModuleConfigReflectionAccessor.getValue(config, a.key);
+                ModuleConfigReflectionAccessor.setValue(config, a.key, a.value);
+                applied++;
+                send(client, Text.translatable("billy-inf.msg.config_set",
+                                Text.literal(moduleId + ":" + a.key).formatted(Formatting.GOLD),
+                                Text.literal(String.valueOf(old)).formatted(Formatting.GRAY),
+                                Text.literal(a.value).formatted(Formatting.GREEN)));
+            } catch (ModuleConfigReflectionAccessor.ConfigAccessException e) {
+                send(client, Text.translatable("billy-inf.msg.config_error",
+                                moduleId + ":" + a.key, e.getMessage())
+                        .formatted(Formatting.RED));
+            }
+        }
+        if (applied > 0) {
             module.saveConfig();
-            send(client, Text.translatable("billy-inf.msg.config_set",
-                            Text.literal(moduleId + ":" + path).formatted(Formatting.GOLD),
-                            Text.literal(String.valueOf(old)).formatted(Formatting.GRAY),
-                            Text.literal(value).formatted(Formatting.GREEN)));
-            return 1;
-        } catch (ModuleConfigReflectionAccessor.ConfigAccessException e) {
-            send(client, Text.translatable("billy-inf.msg.config_error",
-                            moduleId + ":" + path, e.getMessage())
-                    .formatted(Formatting.RED));
-            return 0;
         }
+        return applied > 0 ? 1 : 0;
     }
 
-    private static int configReset(net.minecraft.client.MinecraftClient client, String target) {
-        String[] parts = splitTarget(target);
-        String moduleId = normalizeModuleId(parts[0]);
-        String path = parts[1];
-        IModule module = (moduleId == null) ? null : ModuleRegistry.get(moduleId);
+    private static int configReset(net.minecraft.client.MinecraftClient client, String moduleId, String path) {
+        IModule module = ModuleRegistry.get(normalizeModuleId(moduleId));
         if (module == null || module.getConfig() == null) {
             send(client, Text.translatable("billy-inf.msg.module_config_none",
                             moduleId == null ? "?" : moduleId)
@@ -224,60 +229,43 @@ public final class InfrastructureCommands {
         }
     }
 
-    /** 配置目标（moduleId:path）补全：优先按已输入前缀匹配模块 id，再匹配路径。 */
+    /**
+     * 配置路径补全（get / reset 的 {@code <path>} 参数）：基于当前 {@code <module>} 参数，
+     * 用 {@link CliCompletion} 的层级模式按字典树向下钻取一层，支持含 {@code .} 的嵌套路径。
+     */
     private static final SuggestionProvider<FabricClientCommandSource> CONFIG_PATH_SUGGESTIONS =
-            (ctx, builder) -> {
-                // 大小写归一固定 Locale.ROOT：默认 locale 为 tr_TR 时 'I' 会转成 'ı'，
-                // 导致含大写 I 的模块 id / 配置路径补全静默失效
-                String remaining = builder.getRemaining().toLowerCase(Locale.ROOT);
-                for (IModule module : ModuleRegistry.getAll()) {
-                    Object config = module.getConfig();
-                    if (config == null) continue;
-                    String moduleStr = module.getId().toLowerCase(Locale.ROOT);
-                    if (!moduleStr.startsWith(remaining) && !remaining.startsWith(moduleStr)) continue;
-                    for (String path : ModuleConfigReflectionAccessor.listPaths(config)) {
-                        String full = module.getId() + ":" + path;
-                        if (full.toLowerCase(Locale.ROOT).startsWith(remaining)) {
-                            builder.suggest(full);
-                        }
-                    }
-                }
-                return builder.buildFuture();
-            };
+            CliCompletion.builder()
+                    .keySource(ctx -> {
+                        IModule m = moduleOf(ctx, "module");
+                        return (m == null || m.getConfig() == null)
+                                ? List.of() : ModuleConfigReflectionAccessor.listPaths(m.getConfig());
+                    })
+                    .build();
 
     /**
-     * {@code /inf config set} 的整串补全：尚未输入空白时补全路径，
-     * 已输入空白后按路径类型补全值。
-     *
-     * <p>值候选必须用 {@link SuggestionsBuilder#createOffset} 只替换正在输入的值片段，
-     * 否则会连同前面的 {@code moduleId:path} 一起被候选覆盖。</p>
+     * 配置赋值补全（set 的 {@code <assignments>} 参数）：层级模式 + assignment + multiple。
+     * <ul>
+     *   <li>逐层钻取配置路径，补全到叶子后追加 {@code =} 候选；</li>
+     *   <li>通过 {@code valueProvider} 取得该路径的合法取值（bool/枚举/当前值）一并给出；</li>
+     *   <li>多条 {@code path=value} 以空白分隔时自动循环补全。</li>
+     * </ul>
      */
     private static final SuggestionProvider<FabricClientCommandSource> CONFIG_ASSIGNMENT_SUGGESTIONS =
-            (ctx, builder) -> {
-                String typed = builder.getRemaining();
-                int sep = indexOfWhitespace(typed);
-                if (sep < 0) {
-                    // 仍在输入 moduleId:path 部分
-                    return CONFIG_PATH_SUGGESTIONS.getSuggestions(ctx, builder);
-                }
-                String[] parts = splitTarget(typed.substring(0, sep));
-                String moduleId = normalizeModuleId(parts[0]);
-                IModule module = (moduleId == null) ? null : ModuleRegistry.get(moduleId);
-                if (module == null || module.getConfig() == null) {
-                    return builder.buildFuture();
-                }
-                String fragment = typed.substring(sep + 1).stripLeading();
-                SuggestionsBuilder valueBuilder =
-                        builder.createOffset(builder.getInput().length() - fragment.length());
-                String lower = fragment.toLowerCase(Locale.ROOT);
-                for (String candidate :
-                        ModuleConfigReflectionAccessor.suggestValues(module.getConfig(), parts[1])) {
-                    if (candidate.toLowerCase(Locale.ROOT).startsWith(lower)) {
-                        valueBuilder.suggest(candidate);
-                    }
-                }
-                return valueBuilder.buildFuture();
-            };
+            CliCompletion.builder()
+                    .separators(".:")
+                    .assignment(true)
+                    .multiple(true)
+                    .keySource(ctx -> {
+                        IModule m = moduleOf(ctx, "module");
+                        return (m == null || m.getConfig() == null)
+                                ? List.of() : ModuleConfigReflectionAccessor.listPaths(m.getConfig());
+                    })
+                    .valueProvider((ctx, key) -> {
+                        IModule m = moduleOf(ctx, "module");
+                        if (m == null || m.getConfig() == null) return List.of();
+                        return ModuleConfigReflectionAccessor.suggestValues(m.getConfig(), key);
+                    })
+                    .build();
 
     // ==================== /inf info ====================
 
