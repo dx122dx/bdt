@@ -17,6 +17,7 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.command.argument.IdentifierArgumentType;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
@@ -52,7 +53,8 @@ public final class DebuggerCommands {
     private static SuggestionProvider<FabricClientCommandSource> idSuggestions(
             Supplier<Collection<? extends Identifier>> idSource) {
         return (ctx, builder) -> {
-            String remaining = builder.getRemaining().toLowerCase();
+            // 容忍用户已手动输入的前导引号，统一按无引号串做前缀过滤
+            String remaining = builder.getRemaining().replace("\"", "").toLowerCase();
             for (Identifier id : idSource.get()) {
                 String idStr = id.toString();
                 if (idStr.toLowerCase().startsWith(remaining)) {
@@ -76,8 +78,8 @@ public final class DebuggerCommands {
      */
     private static final SuggestionProvider<FabricClientCommandSource> ACTION_ARGS_SUGGESTIONS =
             (ctx, builder) -> {
-                String idArg = StringArgumentType.getString(ctx, "id");
-                IDebugAction action = ActionRegistry.get(CsDebuggerMod.id(idArg));
+                Identifier rawId = ctx.getArgument("id", Identifier.class);
+                IDebugAction action = ActionRegistry.get(normalizeIdentifier(rawId));
                 if (action == null) {
                     return builder.buildFuture();
                 }
@@ -108,26 +110,26 @@ public final class DebuggerCommands {
         // ===== /cs dbg action run <id> [args...] + action info <id> =====
         var actionNode = ClientCommandManager.literal("action");
         actionNode.then(ClientCommandManager.literal("run")
-                .then(ClientCommandManager.argument("id", StringArgumentType.string())
+                .then(ClientCommandManager.argument("id", IdentifierArgumentType.identifier())
                         .suggests(ACTION_ID_SUGGESTIONS)
                         // 带参数形式：args 用 greedyString 整串接收后再做引号感知分词
                         .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
                                 .suggests(ACTION_ARGS_SUGGESTIONS)
                                 .executes(ctx -> runAction(
                                         ctx.getSource().getClient(),
-                                        StringArgumentType.getString(ctx, "id"),
+                                        ctx.getArgument("id", Identifier.class),
                                         StringArgumentType.getString(ctx, "args"))))
                         // 无参数形式
                         .executes(ctx -> runAction(
                                 ctx.getSource().getClient(),
-                                StringArgumentType.getString(ctx, "id"),
+                                ctx.getArgument("id", Identifier.class),
                                 null))));
         actionNode.then(ClientCommandManager.literal("info")
-                .then(ClientCommandManager.argument("id", StringArgumentType.string())
+                .then(ClientCommandManager.argument("id", IdentifierArgumentType.identifier())
                         .suggests(ACTION_ID_SUGGESTIONS)
                         .executes(ctx -> showAction(
                                 ctx.getSource().getClient(),
-                                StringArgumentType.getString(ctx, "id")))));
+                                ctx.getArgument("id", Identifier.class)))));
         dbgNode.then(actionNode);
 
         // ===== /cs dbg feat about|enable|disable <id> + feat gui =====
@@ -158,27 +160,27 @@ public final class DebuggerCommands {
     private static LiteralArgumentBuilder<FabricClientCommandSource> featIdNode(
             String literal, FeatureCommand command) {
         return ClientCommandManager.literal(literal)
-                .then(ClientCommandManager.argument("id", StringArgumentType.string())
+                .then(ClientCommandManager.argument("id", IdentifierArgumentType.identifier())
                         .suggests(FEATURE_ID_SUGGESTIONS)
                         .executes(ctx -> command.execute(
                                 ctx.getSource().getClient(),
-                                StringArgumentType.getString(ctx, "id"))));
+                                ctx.getArgument("id", Identifier.class))));
     }
 
     /** 特性子命令的执行逻辑，返回值即命令返回码。 */
     @FunctionalInterface
     private interface FeatureCommand {
-        int execute(MinecraftClient client, String idArg);
+        int execute(MinecraftClient client, Identifier id);
     }
 
     // ==================== 命令执行 ====================
 
     /** 执行指定 id 的调试动作。 */
-    private static int runAction(MinecraftClient client, String idArg, String rawArgs) {
-        Identifier id = parseIdentifier(idArg);
+    private static int runAction(MinecraftClient client, Identifier rawId, String rawArgs) {
+        Identifier id = normalizeIdentifier(rawId);
         IDebugAction action = ActionRegistry.get(id);
         if (action == null) {
-            sendMsg(client, Text.translatable("chunkscanner-debugger.msg.action_not_found", idArg)
+            sendMsg(client, Text.translatable("chunkscanner-debugger.msg.action_not_found", id.toString())
                     .formatted(Formatting.RED));
             return 0;
         }
@@ -207,11 +209,11 @@ public final class DebuggerCommands {
     }
 
     /** 显示指定调试动作的元信息（id / 名称 / 描述）。 */
-    private static int showAction(MinecraftClient client, String idArg) {
-        Identifier id = parseIdentifier(idArg);
+    private static int showAction(MinecraftClient client, Identifier rawId) {
+        Identifier id = normalizeIdentifier(rawId);
         IDebugAction action = ActionRegistry.get(id);
         if (action == null) {
-            sendMsg(client, Text.translatable("chunkscanner-debugger.msg.action_not_found", idArg)
+            sendMsg(client, Text.translatable("chunkscanner-debugger.msg.action_not_found", id.toString())
                     .formatted(Formatting.RED));
             return 0;
         }
@@ -230,11 +232,11 @@ public final class DebuggerCommands {
     }
 
     /** 显示指定特性的当前启用状态。 */
-    private static int showFeature(MinecraftClient client, String idArg) {
-        Identifier id = parseIdentifier(idArg);
+    private static int showFeature(MinecraftClient client, Identifier rawId) {
+        Identifier id = normalizeIdentifier(rawId);
         IDebugFeature feature = FeatureRegistry.get(id);
         if (feature == null) {
-            sendMsg(client, Text.translatable("chunkscanner-debugger.msg.feature_not_found", idArg)
+            sendMsg(client, Text.translatable("chunkscanner-debugger.msg.feature_not_found", id.toString())
                     .formatted(Formatting.RED));
             return 0;
         }
@@ -251,10 +253,10 @@ public final class DebuggerCommands {
     }
 
     /** 启用或禁用指定特性。 */
-    private static int setFeature(MinecraftClient client, String idArg, boolean value) {
-        Identifier id = parseIdentifier(idArg);
+    private static int setFeature(MinecraftClient client, Identifier rawId, boolean value) {
+        Identifier id = normalizeIdentifier(rawId);
         if (FeatureRegistry.get(id) == null) {
-            sendMsg(client, Text.translatable("chunkscanner-debugger.msg.feature_not_found", idArg)
+            sendMsg(client, Text.translatable("chunkscanner-debugger.msg.feature_not_found", id.toString())
                     .formatted(Formatting.RED));
             return 0;
         }
@@ -343,16 +345,18 @@ public final class DebuggerCommands {
     }
 
     /**
-     * 将命令参数中的名称解析为 {@link Identifier}。
+     * 将 {@link IdentifierArgumentType} 解析出的 {@link Identifier} 归一化到本模组的
+     * {@code chunkscanner-debugger} 命名空间。
      *
-     * <p>用户输入通常为裸名（如 {@code dumpdb}），统一补全
-     * {@code chunkscanner-debugger} 命名空间；若输入已含冒号则按原样解析。
-     * 注意 {@code tryParse} 对含非法字符（如大写）的输入返回 null 而非抛异常。</p>
+     * <p>{@link IdentifierArgumentType} 对裸名（如 {@code cs.foo}）默认补全为
+     * {@code minecraft} 命名空间，与我们的 id 约定不符；此处把命名空间为
+     * {@code minecraft} 或缺失的裸名归一到 {@code chunkscanner-debugger}，
+     * 已显式带 {@code chunkscanner-debugger:} 的则原样保留。</p>
      */
-    private static Identifier parseIdentifier(String arg) {
-        if (arg == null || arg.isEmpty()) return CsDebuggerMod.id("unknown");
-        Identifier parsed = Identifier.tryParse(arg);
-        if (parsed != null) return parsed;
-        return CsDebuggerMod.id(arg.toLowerCase());
+    private static Identifier normalizeIdentifier(Identifier id) {
+        if (id == null) return CsDebuggerMod.id("unknown");
+        if (CsDebuggerMod.MOD_ID.equals(id.getNamespace())) return id;
+        // 裸名（minecraft 默认命名空间）或未匹配其它命名空间时，归一到本模组命名空间
+        return new Identifier(CsDebuggerMod.MOD_ID, id.getPath());
     }
 }
