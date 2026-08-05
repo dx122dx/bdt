@@ -3,8 +3,10 @@ package com.billy65536.infrastructure.debugger.config;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -101,14 +103,27 @@ public final class FeatureStateStore {
      */
     public static void save() {
         Path file = path();
+        Path tmp = file.resolveSibling(FILENAME + ".tmp");
         try {
             Path parent = file.getParent();
             if (parent != null) {
                 Files.createDirectories(parent);
             }
-            Files.writeString(file, GSON.toJson(states), StandardCharsets.UTF_8);
+            // 先写临时文件再原子替换：直接覆盖目标文件时若中途崩溃，
+            // 残留的半截 JSON 会在下次 load() 被判为损坏，用户全部开关被静默重置
+            Files.writeString(tmp, GSON.toJson(states), StandardCharsets.UTF_8);
+            try {
+                Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
+            }
         } catch (IOException | RuntimeException e) {
             InfrastructureMod.LOGGER.error("Failed to save feature state file {}: {}", file, e.getMessage());
+            try {
+                Files.deleteIfExists(tmp);
+            } catch (IOException ignored) {
+                // 清理失败无需处理：下次 save 会覆盖同名临时文件
+            }
         }
     }
 }

@@ -18,8 +18,9 @@ import net.minecraft.util.Identifier;
  * 调试动作：调用 {@link ConfigurationLocker#setLocked} 模拟服务端锁定。
  *
  * <p>每个参数形如 {@code 路径=值}（如 {@code components.qshop.highlightEnabled=false}），
- * 多参数时逐条登记锁定并立即强制重放。值为空串表示「仅锁定无强制值」，
- * 省略 {@code =} 与值（仅写路径）等价于仅锁定。</p>
+ * 多参数时逐条登记锁定并立即强制重放。省略 {@code =} 与值（仅写路径）表示
+ * 「仅锁定无强制值」（传 null）；保留 {@code =} 但值为空（如 {@code 路径=}）
+ * 表示强制值为空串——两者语义不同，不可混淆。</p>
  *
  * <p>参数补全：</p>
  * <ul>
@@ -58,14 +59,13 @@ public class SetLockedAction implements IDebugAction {
             String path;
             String value;
             if (eq < 0) {
+                // 省略 '=' → null，语义为「仅登记锁定、不设强制值」
                 path = raw;
-                value = null; // 仅锁定无强制值
+                value = null;
             } else {
+                // 保留 '=' 但值为空 → 空串，是一个合法的强制值（与 null 语义不同）
                 path = raw.substring(0, eq);
                 value = raw.substring(eq + 1);
-                if (value.isEmpty()) {
-                    value = ""; // 空串是合法强制值
-                }
             }
             if (path.isEmpty()) {
                 throw new IllegalArgumentException("空的配置路径: " + raw);

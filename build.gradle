@@ -11,11 +11,12 @@ group = project.maven_group
 def csProps = new Properties()
 def csPropsFile = file("${rootDir}/../chunkscanner/gradle.properties")
 if (csPropsFile.exists()) {
-    csProps.load(new FileInputStream(csPropsFile))
-    project.ext.chunkscanner_version = csProps['mod_version']
-} else {
-    project.ext.chunkscanner_version = project.chunkscanner_default_version
+    // withInputStream 自动关流：Gradle 守护进程长驻，裸 FileInputStream 会累积句柄
+    csPropsFile.withInputStream { csProps.load(it) }
 }
+// 文件缺失或上游改名了 mod_version 时一律回退兜底值，
+// 避免生成 "com.billy65536:chunkscanner:null" 这种难以排查的依赖坐标
+project.ext.chunkscanner_version = csProps['mod_version'] ?: project.chunkscanner_default_version
 
 ext {
     loom_version_manifests = 'https://bmclapi2.bangbang93.com/mc/game/version_manifest_v2.json'

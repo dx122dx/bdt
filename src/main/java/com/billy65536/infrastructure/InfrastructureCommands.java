@@ -2,6 +2,7 @@ package com.billy65536.infrastructure;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import com.billy65536.infrastructure.core.module.IModule;
 import com.billy65536.infrastructure.core.module.ModuleCommandRegistrar;
@@ -11,6 +12,7 @@ import com.billy65536.infrastructure.core.module.ModuleRegistry;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
@@ -63,14 +65,15 @@ public final class InfrastructureCommands {
                                 StringArgumentType.getString(ctx, "target")))));
 
         // /inf config set <moduleId:path> <value>
+        // greedyString 会吞掉整行剩余输入，其后再挂参数节点将永远无法匹配（命令直接不可用），
+        // 因此用单个 greedy 参数同时接收「路径 + 值」，再按首个空白自行切分。
+        // 这样值中的空格也能原样保留（String 类型配置项需要）。
         config.then(ClientCommandManager.literal("set")
-                .then(ClientCommandManager.argument("target", StringArgumentType.greedyString())
-                        .suggests(CONFIG_PATH_SUGGESTIONS)
-                        .then(ClientCommandManager.argument("value", StringArgumentType.greedyString())
-                                .executes(ctx -> configSet(
-                                        ctx.getSource().getClient(),
-                                        StringArgumentType.getString(ctx, "target"),
-                                        StringArgumentType.getString(ctx, "value"))))));
+                .then(ClientCommandManager.argument("assignment", StringArgumentType.greedyString())
+                        .suggests(CONFIG_ASSIGNMENT_SUGGESTIONS)
+                        .executes(ctx -> configSetAssignment(
+                                ctx.getSource().getClient(),
+                                StringArgumentType.getString(ctx, "assignment")))));
 
         // /inf config reset <moduleId:path>
         config.then(ClientCommandManager.literal("reset")
@@ -86,8 +89,27 @@ public final class InfrastructureCommands {
     private static String[] splitTarget(String target) {
         if (target == null) return new String[] { "", "" };
         int idx = target.lastIndexOf(':');
-        if (idx < 0) return new String[] { target, "" }; // 无冒号：整串当作 path，moduleId 留空
+        if (idx < 0) return new String[] { target, "" }; // 无冒号：整串当作 moduleId，path 留空
         return new String[] { target.substring(0, idx), target.substring(idx + 1) };
+    }
+
+    /** 首个空白字符的下标；不含空白返回 -1。 */
+    private static int indexOfWhitespace(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            if (Character.isWhitespace(s.charAt(i))) return i;
+        }
+        return -1;
+    }
+
+    /** 把 {@code <moduleId:path> <value>} 整串切分后转发给 {@link #configSet}。 */
+    private static int configSetAssignment(net.minecraft.client.MinecraftClient client, String assignment) {
+        String trimmed = assignment == null ? "" : assignment.trim();
+        int sep = indexOfWhitespace(trimmed);
+        if (sep < 0) {
+            send(client, Text.translatable("billy-inf.msg.config_set_usage").formatted(Formatting.RED));
+            return 0;
+        }
+        return configSet(client, trimmed.substring(0, sep), trimmed.substring(sep + 1).stripLeading());
     }
 
     /** 模块 id 为无命名空间的纯名称（如 {@code debugger}），原样使用；空值返回 null。 */
@@ -205,20 +227,56 @@ public final class InfrastructureCommands {
     /** 配置目标（moduleId:path）补全：优先按已输入前缀匹配模块 id，再匹配路径。 */
     private static final SuggestionProvider<FabricClientCommandSource> CONFIG_PATH_SUGGESTIONS =
             (ctx, builder) -> {
-                String remaining = builder.getRemaining().toLowerCase();
+                // 大小写归一固定 Locale.ROOT：默认 locale 为 tr_TR 时 'I' 会转成 'ı'，
+                // 导致含大写 I 的模块 id / 配置路径补全静默失效
+                String remaining = builder.getRemaining().toLowerCase(Locale.ROOT);
                 for (IModule module : ModuleRegistry.getAll()) {
                     Object config = module.getConfig();
                     if (config == null) continue;
-                    String moduleStr = module.getId().toLowerCase();
+                    String moduleStr = module.getId().toLowerCase(Locale.ROOT);
                     if (!moduleStr.startsWith(remaining) && !remaining.startsWith(moduleStr)) continue;
                     for (String path : ModuleConfigReflectionAccessor.listPaths(config)) {
                         String full = module.getId() + ":" + path;
-                        if (full.toLowerCase().startsWith(remaining)) {
+                        if (full.toLowerCase(Locale.ROOT).startsWith(remaining)) {
                             builder.suggest(full);
                         }
                     }
                 }
                 return builder.buildFuture();
+            };
+
+    /**
+     * {@code /inf config set} 的整串补全：尚未输入空白时补全路径，
+     * 已输入空白后按路径类型补全值。
+     *
+     * <p>值候选必须用 {@link SuggestionsBuilder#createOffset} 只替换正在输入的值片段，
+     * 否则会连同前面的 {@code moduleId:path} 一起被候选覆盖。</p>
+     */
+    private static final SuggestionProvider<FabricClientCommandSource> CONFIG_ASSIGNMENT_SUGGESTIONS =
+            (ctx, builder) -> {
+                String typed = builder.getRemaining();
+                int sep = indexOfWhitespace(typed);
+                if (sep < 0) {
+                    // 仍在输入 moduleId:path 部分
+                    return CONFIG_PATH_SUGGESTIONS.getSuggestions(ctx, builder);
+                }
+                String[] parts = splitTarget(typed.substring(0, sep));
+                String moduleId = normalizeModuleId(parts[0]);
+                IModule module = (moduleId == null) ? null : ModuleRegistry.get(moduleId);
+                if (module == null || module.getConfig() == null) {
+                    return builder.buildFuture();
+                }
+                String fragment = typed.substring(sep + 1).stripLeading();
+                SuggestionsBuilder valueBuilder =
+                        builder.createOffset(builder.getInput().length() - fragment.length());
+                String lower = fragment.toLowerCase(Locale.ROOT);
+                for (String candidate :
+                        ModuleConfigReflectionAccessor.suggestValues(module.getConfig(), parts[1])) {
+                    if (candidate.toLowerCase(Locale.ROOT).startsWith(lower)) {
+                        valueBuilder.suggest(candidate);
+                    }
+                }
+                return valueBuilder.buildFuture();
             };
 
     // ==================== /inf info ====================
@@ -236,10 +294,10 @@ public final class InfrastructureCommands {
 
     private static final SuggestionProvider<FabricClientCommandSource> MODULE_ID_SUGGESTIONS =
             (ctx, builder) -> {
-                String remaining = builder.getRemaining().toLowerCase();
+                String remaining = builder.getRemaining().toLowerCase(Locale.ROOT);
                 for (IModule m : ModuleRegistry.getAll()) {
                     String id = m.getId();
-                    if (id.toLowerCase().startsWith(remaining)) {
+                    if (id.toLowerCase(Locale.ROOT).startsWith(remaining)) {
                         builder.suggest(id);
                     }
                 }
@@ -290,14 +348,16 @@ public final class InfrastructureCommands {
         MutableText out = Text.literal("");
         out = out.append(Text.literal(module.getId())
                 .formatted(Formatting.GOLD, Formatting.BOLD)).append("\n");
+        // 标签键必须与「整句」键区分：info_version 带 %s 占位符、info_desc 是完整句子，
+        // 直接当标签用会渲染出 "版本：%s1.0.0" 与整句拼接的错乱文本
         out = out.append(Text.literal("  ")
-                .append(Text.translatable("billy-inf.msg.info_version").formatted(Formatting.DARK_GRAY))
+                .append(Text.translatable("billy-inf.msg.info_version_label").formatted(Formatting.DARK_GRAY))
                 .append(Text.literal(module.getVersion()).formatted(Formatting.GRAY))).append("\n");
         out = out.append(Text.literal("  ")
                 .append(Text.translatable("billy-inf.msg.info_name").formatted(Formatting.DARK_GRAY))
                 .append(module.getName().copy().formatted(Formatting.AQUA))).append("\n");
         out = out.append(Text.literal("  ")
-                .append(Text.translatable("billy-inf.msg.info_desc").formatted(Formatting.DARK_GRAY))
+                .append(Text.translatable("billy-inf.msg.info_desc_label").formatted(Formatting.DARK_GRAY))
                 .append(module.getDescription().copy().formatted(Formatting.GRAY))).append("\n");
 
         // 贡献：命令

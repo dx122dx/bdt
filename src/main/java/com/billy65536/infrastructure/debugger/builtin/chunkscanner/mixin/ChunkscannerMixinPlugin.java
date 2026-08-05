@@ -23,7 +23,7 @@ import net.fabricmc.loader.api.FabricLoader;
  *
  * <p>注意：本类在 Mixin 子系统启动阶段被加载，早于大部分模组初始化，
  * 因此只能使用 {@link FabricLoader} 这类此时已可用的 API，
- * 不可引用本模组自身的 {@code InfMod} 等尚未初始化的类。</p>
+ * 不可引用本模组自身的 {@code InfrastructureMod} 等尚未初始化的类。</p>
  */
 public class ChunkscannerMixinPlugin implements IMixinConfigPlugin {
 

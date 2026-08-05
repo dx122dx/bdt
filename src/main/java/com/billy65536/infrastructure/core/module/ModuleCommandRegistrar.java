@@ -39,8 +39,10 @@ public final class ModuleCommandRegistrar {
      * 按 {@link IModule#getCommandLiterals()} 中声明的字面量注册。
      *
      * <p>约定：{@code getCommandLiterals()} 中的字面量必须与 {@code buildCommands()}
-     * 返回的节点顶层 literal 一致。若两者不一致，以字面量列表为准尝试按名匹配；
-     * 若字面量列表为空但节点非空，则使用节点自身的字面量名兜底登记。</p>
+     * 返回的节点顶层 literal 一致。登记键<strong>只取节点自身的 literal</strong>——
+     * 根命令挂载走 {@code root.then(node)}，Brigadier 按节点自身 literal 建树，
+     * 以声明列表为键会登记出实际不存在的命令（并让同一节点被重复挂载）。
+     * 声明列表因此仅用于一致性校验：不匹配时告警，便于模块作者及时发现。</p>
      *
      * @param module 已登记的模块实例
      */
@@ -49,17 +51,19 @@ public final class ModuleCommandRegistrar {
         LiteralArgumentBuilder<FabricClientCommandSource> node = module.buildCommands();
         if (node == null) return;
 
-        Collection<String> literals = module.getCommandLiterals();
-        if (literals == null || literals.isEmpty()) {
-            // 兜底：使用节点自身的字面量名
-            String name = node.getLiteral();
-            registerNode(name, node, module.getId());
+        String actual = node.getLiteral();
+        if (actual == null || actual.isEmpty()) {
+            InfrastructureMod.LOGGER.warn(
+                    "Module {} returned a command node without a literal name, ignored", module.getId());
             return;
         }
-        for (String literal : literals) {
-            if (literal == null || literal.isEmpty()) continue;
-            registerNode(literal, node, module.getId());
+        Collection<String> literals = module.getCommandLiterals();
+        if (literals != null && !literals.isEmpty() && !literals.contains(actual)) {
+            InfrastructureMod.LOGGER.warn(
+                    "Module {} declares command literals {} but its node literal is '{}'; "
+                            + "only '/inf {}' will be mounted", module.getId(), literals, actual, actual);
         }
+        registerNode(actual, node, module.getId());
     }
 
     private static void registerNode(String literal,

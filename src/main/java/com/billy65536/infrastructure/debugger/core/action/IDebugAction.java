@@ -10,7 +10,7 @@ import net.minecraft.util.Identifier;
  * 调试动作扩展点。
  *
  * <p>Action 表示一次性执行的调试操作，通过 {@link ActionRegistry} 注册后，
- * 可由命令 {@code /cs dbg action <id> [args...]} 触发。</p>
+ * 可由命令 {@code /inf dbg action run <id> [args...]} 触发。</p>
  *
  * <p>每个动作有三个属性：id（唯一不变，用于注册和命令选择）、
  * name（本地化显示名）、description（本地化描述）。</p>

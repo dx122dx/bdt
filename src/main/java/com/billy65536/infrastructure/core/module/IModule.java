@@ -23,8 +23,11 @@ import net.minecraft.text.Text;
 public interface IModule {
 
     /**
-     * 模块唯一标识。自由格式字符串，建议命名空间与所属 mod 一致
-     * （如 {@code billy-inf:debugger}）。作为配置 / 命令 / 贡献报告的反查主键。
+     * 模块唯一标识。无命名空间的纯名称（如 {@code debugger}），
+     * 作为配置 / 命令 / 贡献报告的反查主键。
+     *
+     * <p>不可含冒号：{@code /inf config} 的目标串按最后一个冒号切分为
+     * {@code <moduleId>:<path>}，id 内的冒号会导致切分结果错位。</p>
      */
     String getId();
 
@@ -36,6 +39,21 @@ public interface IModule {
 
     /** 模块功能描述（支持彩色文本）。 */
     Text getDescription();
+
+    // =================== 可选：模块初始化 ===================
+
+    /**
+     * 模块自身的初始化钩子，由 {@link ModuleRegistry#discover()} 在登记前调用。
+     * 默认空实现。
+     *
+     * <p>模块私有的准备工作（配置注册、状态加载、扩展点注册等）应放在这里，
+     * 而非由模组主类代劳，以保证主类不感知任何具体模块。</p>
+     *
+     * <p>本方法抛出的任何 {@link Throwable} 都会被注册表捕获并记录，
+     * 该模块随即被跳过，不影响其它模块与框架自身。</p>
+     */
+    default void onInitializeModule() {}
+
 
     // ==================== 可选：模块配置 ====================
 

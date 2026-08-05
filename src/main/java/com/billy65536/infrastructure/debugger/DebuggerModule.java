@@ -5,7 +5,9 @@ import java.util.List;
 
 import com.billy65536.infrastructure.InfrastructureMod;
 import com.billy65536.infrastructure.core.module.IModule;
+import com.billy65536.infrastructure.debugger.builtin.BuiltinsManager;
 import com.billy65536.infrastructure.debugger.config.DebuggerConfigLoader;
+import com.billy65536.infrastructure.debugger.config.FeatureStateStore;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.loader.api.FabricLoader;
@@ -57,6 +59,14 @@ public final class DebuggerModule implements IModule {
     @Override
     public Text getDescription() {
         return Text.translatable("billy-inf.msg.module_debugger_desc");
+    }
+
+    // =================== 初始化 ===================
+    @Override
+    public void onInitializeModule() {
+        DebuggerConfigLoader.register();
+        FeatureStateStore.load();
+        BuiltinsManager.registerAll();
     }
 
     // ==================== 配置 ====================

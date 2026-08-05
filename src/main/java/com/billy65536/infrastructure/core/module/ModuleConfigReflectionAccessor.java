@@ -5,9 +5,12 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -48,7 +51,7 @@ public final class ModuleConfigReflectionAccessor {
     private static Map<String, Field[]> indexOf(Class<?> type) {
         return INDEX_CACHE.computeIfAbsent(type, t -> {
             Map<String, Field[]> map = new LinkedHashMap<>();
-            collect(t, "", new ArrayList<>(), map);
+            collect(t, "", new ArrayList<>(), map, new HashSet<>(), 0);
             return Collections.unmodifiableMap(map);
         });
     }
@@ -67,21 +70,44 @@ public final class ModuleConfigReflectionAccessor {
         });
     }
 
-    /** 递归收集叶子字段路径。 */
-    private static void collect(Class<?> type, String prefix, List<Field> chain, Map<String, Field[]> out) {
-        for (Field f : type.getDeclaredFields()) {
-            int mod = f.getModifiers();
-            if (Modifier.isStatic(mod) || Modifier.isTransient(mod) || f.isSynthetic()) continue;
-            if (!Modifier.isPublic(mod)) continue;
+    /** 递归深度上限：配置对象图正常不会超过数层，超出即视为存在环。 */
+    private static final int MAX_DEPTH = 8;
 
-            String path = prefix.isEmpty() ? f.getName() : prefix + "." + f.getName();
-            chain.add(f);
-            if (isLeaf(f.getType())) {
-                out.put(path, chain.toArray(new Field[0]));
-            } else {
-                collect(f.getType(), path, chain, out);
+    /**
+     * 递归收集叶子字段路径。
+     *
+     * <p>{@code visiting} 记录当前递归路径上的类型做环检测，并叠加深度上限双保险：
+     * 第三方模块的配置类可能存在自引用（如 {@code public Node parent}），
+     * 无防护会直接 {@link StackOverflowError}，而调用方只 catch
+     * {@link ConfigAccessException}，Error 会逸出到命令层甚至补全线程。</p>
+     *
+     * <p>用 {@code getFields()} 而非 {@code getDeclaredFields()}：本方法只纳入 public 字段，
+     * 前者同时覆盖继承自基类的 public 字段，避免配置类继承时静默丢路径。</p>
+     */
+    private static void collect(Class<?> type, String prefix, List<Field> chain,
+            Map<String, Field[]> out, Set<Class<?>> visiting, int depth) {
+        if (depth > MAX_DEPTH || !visiting.add(type)) {
+            InfrastructureModHolder.LOGGER.warn(
+                    "Config path '{}' skipped: cyclic or too deeply nested type {}",
+                    prefix.isEmpty() ? "<root>" : prefix, type.getName());
+            return;
+        }
+        try {
+            for (Field f : type.getFields()) {
+                int mod = f.getModifiers();
+                if (Modifier.isStatic(mod) || Modifier.isTransient(mod) || f.isSynthetic()) continue;
+
+                String path = prefix.isEmpty() ? f.getName() : prefix + "." + f.getName();
+                chain.add(f);
+                if (isLeaf(f.getType())) {
+                    out.put(path, chain.toArray(new Field[0]));
+                } else {
+                    collect(f.getType(), path, chain, out, visiting, depth + 1);
+                }
+                chain.remove(chain.size() - 1);
             }
-            chain.remove(chain.size() - 1);
+        } finally {
+            visiting.remove(type);
         }
     }
 
@@ -269,13 +295,15 @@ public final class ModuleConfigReflectionAccessor {
         return cur == null ? List.of() : List.of(String.valueOf(cur));
     }
 
-    /** 路径补全：返回全部已知路径前缀匹配 {@code prefix} 的候选（小写不敏感）。 */
+    /** 路径补全：返回全部已知路径前缀匹配 {@code prefix} 的候选（大小写不敏感）。 */
     public static List<String> suggestPaths(Object config, String prefix) {
         if (config == null) return List.of();
-        String p = prefix == null ? "" : prefix.toLowerCase();
+        // 大小写归一固定 Locale.ROOT：默认 locale 为 tr_TR 时 'I' 会转成 'ı'，
+        // 导致含大写 I 的配置路径补全静默失效
+        String p = prefix == null ? "" : prefix.toLowerCase(Locale.ROOT);
         List<String> out = new ArrayList<>();
         for (String path : indexOf(config.getClass()).keySet()) {
-            if (path.toLowerCase().startsWith(p)) out.add(path);
+            if (path.toLowerCase(Locale.ROOT).startsWith(p)) out.add(path);
         }
         return out;
     }

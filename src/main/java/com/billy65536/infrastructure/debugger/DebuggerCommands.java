@@ -1,6 +1,7 @@
 package com.billy65536.infrastructure.debugger;
 
 import java.util.Collection;
+import java.util.Locale;
 import java.util.function.Supplier;
 
 import com.billy65536.infrastructure.debugger.config.DebugToolsConfigScreen;
@@ -14,6 +15,7 @@ import com.billy65536.infrastructure.InfrastructureMod;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
@@ -52,11 +54,13 @@ public final class DebuggerCommands {
     private static SuggestionProvider<FabricClientCommandSource> idSuggestions(
             Supplier<Collection<? extends Identifier>> idSource) {
         return (ctx, builder) -> {
-            // 容忍用户已手动输入的前导引号，统一按无引号串做前缀过滤
-            String remaining = builder.getRemaining().replace("\"", "").toLowerCase();
+            // 容忍用户已手动输入的前导引号，统一按无引号串做前缀过滤。
+            // 大小写归一固定 Locale.ROOT：默认 locale 为 tr_TR 时 'I' 会转成 'ı'，
+            // 导致含大写 I 的 id 补全静默失效
+            String remaining = builder.getRemaining().replace("\"", "").toLowerCase(Locale.ROOT);
             for (Identifier id : idSource.get()) {
                 String idStr = id.toString();
-                if (idStr.toLowerCase().startsWith(remaining)) {
+                if (idStr.toLowerCase(Locale.ROOT).startsWith(remaining)) {
                     builder.suggest(idStr);
                 }
             }
@@ -82,18 +86,34 @@ public final class DebuggerCommands {
                 if (action == null) {
                     return builder.buildFuture();
                 }
-                // 已完整输入的参数（不含正在输入的那一段），交由动作判断当前参数位
-                String rawArgs = builder.getInput()
-                        .substring(builder.getInput().length() - builder.getRemaining().length());
-                String[] completed = ArgTokenizer.tokenize(rawArgs);
-                String remaining = builder.getRemaining().toLowerCase();
+                // builder.getRemaining() 即 args 参数已输入的全部文本。
+                // 按最后一个空白切分：其后是正在输入的片段，其前是已完成的参数。
+                // （不能用 "input 长度减 remaining 长度" 去截取，那恒等于 remaining 本身，
+                //   会把整串当成「已完成参数」传给动作，参数位判断全错。）
+                String typed = builder.getRemaining();
+                int lastWs = lastIndexOfWhitespace(typed);
+                String fragment = (lastWs < 0) ? typed : typed.substring(lastWs + 1);
+                String[] completed = ArgTokenizer.tokenize(lastWs < 0 ? "" : typed.substring(0, lastWs));
+
+                // 只替换正在输入的片段，否则候选会覆盖掉此前已输入的参数
+                SuggestionsBuilder target =
+                        builder.createOffset(builder.getInput().length() - fragment.length());
+                String lower = fragment.toLowerCase(Locale.ROOT);
                 for (String candidate : action.suggest(ctx.getSource().getClient(), completed)) {
-                    if (candidate.toLowerCase().startsWith(remaining)) {
-                        builder.suggest(candidate);
+                    if (candidate.toLowerCase(Locale.ROOT).startsWith(lower)) {
+                        target.suggest(candidate);
                     }
                 }
-                return builder.buildFuture();
+                return target.buildFuture();
             };
+
+    /** 最后一个空白字符的下标；不含空白返回 -1。 */
+    private static int lastIndexOfWhitespace(String s) {
+        for (int i = s.length() - 1; i >= 0; i--) {
+            if (Character.isWhitespace(s.charAt(i))) return i;
+        }
+        return -1;
+    }
 
     // ==================== 命令构建 ====================
 
@@ -187,19 +207,21 @@ public final class DebuggerCommands {
             InfrastructureMod.LOGGER.info("Executing debug action {} with {} arg(s)", id, args.length);
         }
 
-        // 调试代码稳定性天然偏低，异常必须捕获，绝不允许逸出到 Brigadier
+        // 调试代码稳定性天然偏低，异常必须捕获，绝不允许逸出到 Brigadier。
+        // 捕获 Throwable 而非 Exception：内置包动作会触碰目标模组的类，
+        // 目标模组版本不匹配时抛的是 NoClassDefFoundError / NoSuchMethodError 等 LinkageError
         try {
             action.execute(client, args);
             sendMsg(client, Text.translatable("billy-inf.msg.action_success", id.toString())
                     .formatted(Formatting.GREEN));
             return 1;
-        } catch (Exception e) {
-            InfrastructureMod.LOGGER.error("Debug action {} failed", id, e);
-            String reason = (e.getMessage() != null) ? e.getMessage() : e.getClass().getSimpleName();
+        } catch (Throwable t) {
+            InfrastructureMod.LOGGER.error("Debug action {} failed", id, t);
+            String reason = (t.getMessage() != null) ? t.getMessage() : t.getClass().getSimpleName();
             sendMsg(client, Text.translatable("billy-inf.msg.action_failed", id.toString(), reason)
                     .formatted(Formatting.RED));
             if (DebuggerConfigLoader.get().showActionStackTrace) {
-                sendStackTrace(client, e);
+                sendStackTrace(client, t);
             }
             return 0;
         }
@@ -333,7 +355,7 @@ public final class DebuggerCommands {
     }
 
     /** 发送异常堆栈摘要（最多 5 帧），供排查动作内部错误。 */
-    private static void sendStackTrace(MinecraftClient client, Exception e) {
+    private static void sendStackTrace(MinecraftClient client, Throwable e) {
         StackTraceElement[] trace = e.getStackTrace();
         int limit = Math.min(trace.length, 5);
         for (int i = 0; i < limit; i++) {

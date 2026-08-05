@@ -24,6 +24,8 @@
     "billy-inf.msg.info_desc": "通用客户端基础设施 —— 用于以模块方式扩展 /inf 的模块化框架。",
     "billy-inf.msg.info_modules": "已注册模块：",
     "billy-inf.msg.info_name": "名称：",
+    "billy-inf.msg.info_version_label": "版本：",
+    "billy-inf.msg.info_desc_label": "描述：",
     "billy-inf.msg.info_contrib_commands": "贡献的命令：",
     "billy-inf.msg.info_contrib_configs": "配置路径：",
     "billy-inf.msg.module_debugger_name": "调试器",
@@ -36,6 +38,7 @@
     "billy-inf.msg.config_set": "已设置 %s：%s → %s",
     "billy-inf.msg.config_reset": "已重置 %s：%s → %s",
     "billy-inf.msg.config_error": "配置 %s 错误：%s",
+    "billy-inf.msg.config_set_usage": "用法：/inf config set <模块:路径> <值>",
 
     "billy-inf.gui.title": "Billy's Mod infrastructure",
     "billy-inf.gui.category.general": "通用设置",

@@ -16,7 +16,7 @@
 	"environment": "client",
 	"entrypoints": {
 		"client": [
-			"com.billy65536.infrastructure.InfMod"
+			"com.billy65536.infrastructure.InfrastructureMod"
 		],
 		"modmenu": [
 			"com.billy65536.infrastructure.debugger.integration.ModMenuIntegration"
@@ -31,7 +31,7 @@
 	},
 	"suggests": {
 		"modmenu": "*",
-		"chunkscanner": ">=1.1.0-dev-20260805.1"
+		"chunkscanner": ">=1.1.0-rc.1"
 	},
 	"mixins": [
 		"debugger.chunkscanner.mixins.json"

@@ -89,15 +89,34 @@ public final class ModuleRegistry {
         discovered = true;
         ServiceLoader<IModule> loader =
                 ServiceLoader.load(IModule.class, IModule.class.getClassLoader());
-        for (Iterator<IModule> it = loader.iterator(); it.hasNext(); ) {
+        Iterator<IModule> it = loader.iterator();
+        while (true) {
             IModule module;
             try {
+                // hasNext() 同样会解析 provider 配置并抛 ServiceConfigurationError，必须一并包住
+                if (!it.hasNext()) break;
                 module = it.next();
             } catch (java.util.ServiceConfigurationError e) {
-                InfrastructureMod.LOGGER.error("Failed to load a module service, skipping", e);
-                continue;
+                InfrastructureMod.LOGGER.error("Failed to load a module service, aborting discovery", e);
+                break;
             }
-            register(module);
+            // 模块初始化与登记的任何 Throwable（含 NoClassDefFoundError 等 LinkageError）
+            // 都只记录并跳过：框架与其它模块的可用性优先于任一模块
+            try {
+                module.onInitializeModule();
+                register(module);
+            } catch (Throwable t) {
+                InfrastructureMod.LOGGER.error("Module {} failed to initialize, skipping", safeId(module), t);
+            }
+        }
+    }
+
+    /** 尽最大努力取模块 id 用于日志；实现异常时退化为类名。 */
+    private static String safeId(IModule module) {
+        try {
+            return String.valueOf(module.getId());
+        } catch (Throwable t) {
+            return module.getClass().getName();
         }
     }
 }

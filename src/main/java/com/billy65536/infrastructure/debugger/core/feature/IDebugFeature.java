@@ -7,7 +7,7 @@ import net.minecraft.util.Identifier;
  * 调试特性扩展点。
  *
  * <p>Feature 表示可开关的持续性调试功能，通过 {@link FeatureRegistry} 注册后，
- * 可由命令 {@code /cs dbg feat <id> [enable|disable]} 查询与切换，
+ * 可由命令 {@code /inf dbg feat about|enable|disable <id>} 查询与切换，
  * 启用状态持久化到配置文件，重启游戏后保持。</p>
  *
  * <p>每个特性有三个属性：id（唯一不变，用于注册和命令选择）、
