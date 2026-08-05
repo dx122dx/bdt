@@ -2,6 +2,9 @@
     "chunkscanner-debugger.msg.action_success": "Debug action completed: %s",
     "chunkscanner-debugger.msg.action_failed": "Debug action %s failed: %s",
     "chunkscanner-debugger.msg.action_not_found": "Debug action not found: %s",
+    "chunkscanner-debugger.msg.action_info_id": "Debug action: %s",
+    "chunkscanner-debugger.msg.action_info_name": "Name: ",
+    "chunkscanner-debugger.msg.action_info_desc": "Description: ",
 
     "chunkscanner-debugger.msg.feature_status": "Debug feature %s is currently %s",
     "chunkscanner-debugger.msg.feature_enabled": "Enabled debug feature: %s",

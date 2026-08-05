@@ -2,6 +2,9 @@
     "chunkscanner-debugger.msg.action_success": "调试动作执行完成：%s",
     "chunkscanner-debugger.msg.action_failed": "调试动作 %s 执行失败：%s",
     "chunkscanner-debugger.msg.action_not_found": "未找到调试动作：%s",
+    "chunkscanner-debugger.msg.action_info_id": "调试动作：%s",
+    "chunkscanner-debugger.msg.action_info_name": "名称：",
+    "chunkscanner-debugger.msg.action_info_desc": "描述：",
 
     "chunkscanner-debugger.msg.feature_status": "调试特性 %s 当前状态：%s",
     "chunkscanner-debugger.msg.feature_enabled": "已启用调试特性：%s",

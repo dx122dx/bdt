@@ -31,6 +31,7 @@ import net.minecraft.util.Identifier;
  * <p>提供的子命令：</p>
  * <ul>
  *   <li>{@code /cs dbg action run <id> [args...]} —— 执行调试动作</li>
+ *   <li>{@code /cs dbg action info <id>} —— 查询调试动作的元信息</li>
  *   <li>{@code /cs dbg feat about <id>} —— 查询调试特性的启用状态</li>
  *   <li>{@code /cs dbg feat enable|disable <id>} —— 启用/禁用调试特性</li>
  *   <li>{@code /cs dbg feat gui} —— 打开特性开关配置界面</li>
@@ -104,7 +105,7 @@ public final class DebuggerCommands {
         var root = ClientCommandManager.literal(rootName);
         var dbgNode = ClientCommandManager.literal("dbg");
 
-        // ===== /cs dbg action run <id> [args...] =====
+        // ===== /cs dbg action run <id> [args...] + action info <id> =====
         var actionNode = ClientCommandManager.literal("action");
         actionNode.then(ClientCommandManager.literal("run")
                 .then(ClientCommandManager.argument("id", StringArgumentType.string())
@@ -121,6 +122,12 @@ public final class DebuggerCommands {
                                 ctx.getSource().getClient(),
                                 StringArgumentType.getString(ctx, "id"),
                                 null))));
+        actionNode.then(ClientCommandManager.literal("info")
+                .then(ClientCommandManager.argument("id", StringArgumentType.string())
+                        .suggests(ACTION_ID_SUGGESTIONS)
+                        .executes(ctx -> showAction(
+                                ctx.getSource().getClient(),
+                                StringArgumentType.getString(ctx, "id")))));
         dbgNode.then(actionNode);
 
         // ===== /cs dbg feat about|enable|disable <id> + feat gui =====
@@ -197,6 +204,29 @@ public final class DebuggerCommands {
             }
             return 0;
         }
+    }
+
+    /** 显示指定调试动作的元信息（id / 名称 / 描述）。 */
+    private static int showAction(MinecraftClient client, String idArg) {
+        Identifier id = parseIdentifier(idArg);
+        IDebugAction action = ActionRegistry.get(id);
+        if (action == null) {
+            sendMsg(client, Text.translatable("chunkscanner-debugger.msg.action_not_found", idArg)
+                    .formatted(Formatting.RED));
+            return 0;
+        }
+        sendMsg(client, Text.translatable("chunkscanner-debugger.msg.action_info_id",
+                        Text.literal(id.toString()).formatted(Formatting.GOLD))
+                .formatted(Formatting.GRAY));
+        sendMsg(client, Text.literal("  ")
+                .append(Text.translatable("chunkscanner-debugger.msg.action_info_name")
+                        .formatted(Formatting.DARK_GRAY))
+                .append(action.getName().copy().formatted(Formatting.AQUA)));
+        sendMsg(client, Text.literal("  ")
+                .append(Text.translatable("chunkscanner-debugger.msg.action_info_desc")
+                        .formatted(Formatting.DARK_GRAY))
+                .append(action.getDescription().copy().formatted(Formatting.GRAY)));
+        return 1;
     }
 
     /** 显示指定特性的当前启用状态。 */
