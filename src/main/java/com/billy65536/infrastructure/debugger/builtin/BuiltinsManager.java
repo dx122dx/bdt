@@ -1,10 +1,12 @@
 package com.billy65536.infrastructure.debugger.builtin;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import com.billy65536.infrastructure.InfrastructureMod;
-import com.billy65536.infrastructure.debugger.builtin.chunkscanner.ChunkScannerBuiltins;
+import com.billy65536.infrastructure.debugger.api.DebuggerBuiltinProvider;
 
+import net.fabricmc.loader.api.entrypoint.EntrypointContainer;
 import net.fabricmc.loader.api.FabricLoader;
 
 /**
@@ -20,14 +22,23 @@ import net.fabricmc.loader.api.FabricLoader;
  * JVM 在校验本类时就可能提前解析这些常量池引用，目标模组缺失时抛
  * {@link NoClassDefFoundError}，使 {@code isModLoaded} 判断形同虚设。</p>
  *
- * <p>因此本类<b>只引用各内置包的注册入口类</b>（如 {@link ChunkScannerBuiltins}），
- * 绝不引用其中的具体实现类。入口类作为独立类，只有在 {@code register()} 被实际调用时
- * 才由 JVM 加载并解析其常量池，此时目标模组必然在场。</p>
+ * <p>因此本类<b>只引用各内置包的注册入口类</b>（如外部 mod 提供的
+ * {@code XxxBuiltins}），绝不引用其中的具体实现类。入口类作为独立类，只有在
+ * {@code register()} 被实际调用时才由 JVM 加载并解析其常量池，此时目标模组必然在场。</p>
  *
  * <h2>扩展方式</h2>
  *
- * <p>新增对其他模组的内置支持：(1) 建 {@code builtin/<modid>/} 包；
- * (2) 写一个 {@code XxxBuiltins.register()} 入口类；(3) 在 {@link #PACKS} 加一行。</p>
+ * <p>内置调试包由<b>外部 mod</b> 通过 billy-inf 的调试框架扩展点注入：</p>
+ * <ol>
+ *   <li>外部 mod 实现 {@link DebuggerBuiltinProvider} 接口；</li>
+ *   <li>在其 {@code fabric.mod.json} 注册自定义 entrypoint {@code "billy-inf:debugger"}，
+ *       值为该实现类的全限定名；</li>
+ *   <li>在 {@link DebuggerBuiltinProvider#contribute} 中调用
+ *       {@code contributor.add(requiredModId, displayName, XxxBuiltins::register)}。</li>
+ * </ol>
+ *
+ * <p>billy-inf 自身不再硬编码任何具体目标模组的调试逻辑；本类的
+ * {@link #PACKS} 仅保留纯框架内置（当前为空）。</p>
  */
 public final class BuiltinsManager {
 
@@ -41,23 +52,36 @@ public final class BuiltinsManager {
      */
     private record BuiltinPack(String requiredModId, String displayName, Runnable entry) {}
 
-    /** 全部内置包。顺序决定注册顺序，进而决定命令补全与列表的展示顺序。 */
-    private static final List<BuiltinPack> PACKS = List.of(
-            new BuiltinPack("chunkscanner", "chunkscanner", ChunkScannerBuiltins::register)
-    );
+    /** 框架内置包（当前为空；外部 mod 的包经由 {@code billy-inf:debugger} entrypoint 注入）。 */
+    private static final List<BuiltinPack> PACKS = List.of();
 
     private BuiltinsManager() {}
 
     /**
-     * 注册全部内置包。
+     * 注册全部内置包：先合并框架内置包与外部 mod 注入的包，再逐包判定目标模组是否加载。
      *
-     * <p>逐包判定目标模组是否加载，未加载则跳过。注册过程中的任何 {@link Throwable}
+     * <p>外部 mod 通过 {@code "billy-inf:debugger"} entrypoint 贡献其内置包，
+     * 由 {@link DebuggerBuiltinProvider} 收集。注册过程中的任何 {@link Throwable}
      * （含 {@link NoClassDefFoundError}、{@link LinkageError} 等类加载期错误）都会被
      * 捕获并记录，绝不阻断模组初始化——调试工具的可用性优先级低于宿主游戏的启动成功率。</p>
      */
     public static void registerAll() {
         FabricLoader loader = FabricLoader.getInstance();
-        for (BuiltinPack pack : PACKS) {
+        List<BuiltinPack> all = new ArrayList<>(PACKS);
+
+        // 收集外部 mod 通过 "billy-inf:debugger" entrypoint 注入的内置包
+        for (EntrypointContainer<DebuggerBuiltinProvider> container
+                : loader.getEntrypointContainers("billy-inf:debugger", DebuggerBuiltinProvider.class)) {
+            try {
+                container.getEntrypoint().contribute((requiredModId, displayName, entry) ->
+                        all.add(new BuiltinPack(requiredModId, displayName, entry)));
+            } catch (Throwable t) {
+                InfrastructureMod.LOGGER.error("Failed to collect builtin packs from mod '{}'",
+                        container.getProvider().getMetadata().getId(), t);
+            }
+        }
+
+        for (BuiltinPack pack : all) {
             if (!loader.isModLoaded(pack.requiredModId())) {
                 InfrastructureMod.LOGGER.info("Builtin pack '{}': skipped (mod '{}' not loaded)",
                         pack.displayName(), pack.requiredModId());

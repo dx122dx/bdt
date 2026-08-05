@@ -6,18 +6,6 @@ plugins {
 version = project.mod_version
 group = project.maven_group
 
-// 自动复用 Chunk Scanner 工程的版本号，避免手动同步导致 build 失败。
-// 依赖 ../chunkscanner/gradle.properties 中的 mod_version；若路径失效则回退到兜底值。
-def csProps = new Properties()
-def csPropsFile = file("${rootDir}/../chunkscanner/gradle.properties")
-if (csPropsFile.exists()) {
-    // withInputStream 自动关流：Gradle 守护进程长驻，裸 FileInputStream 会累积句柄
-    csPropsFile.withInputStream { csProps.load(it) }
-}
-// 文件缺失或上游改名了 mod_version 时一律回退兜底值，
-// 避免生成 "com.billy65536:chunkscanner:null" 这种难以排查的依赖坐标
-project.ext.chunkscanner_version = csProps['mod_version'] ?: project.chunkscanner_default_version
-
 ext {
     loom_version_manifests = 'https://bmclapi2.bangbang93.com/mc/game/version_manifest_v2.json'
     loom_libraries_base = 'https://bmclapi2.bangbang93.com/libraries/'
@@ -48,10 +36,6 @@ repositories {
         url = 'https://maven.shedaniel.me/'
     }
     mavenCentral()
-    // Chunk Scanner 本地构建产物（需先 cd ../chunkscanner && sh ./gradlew build）
-    flatDir {
-        dirs "${rootDir}/../chunkscanner/build/libs"
-    }
 }
 
 dependencies {
@@ -71,13 +55,6 @@ dependencies {
 
 	// ModMenu 为可选依赖：仅编译期需要 API，运行时缺失不影响功能
 	modCompileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
-
-	// Chunk Scanner 为可选依赖：仅编译 builtin.chunkscanner 内置包与其 Mixin 时需要 API，
-	// 运行时缺失不影响本模组启动（BuiltinsManager 会跳过该内置包，BdtMixinPlugin 会跳过其 Mixin）。
-	// 版本号自动复用 ../chunkscanner/gradle.properties 的 mod_version。
-	// 注意：因为是 compileOnly，runClient 开发环境不会自动加载 chunkscanner；
-	// 若需联调 builtin.chunkscanner 组件，请手工把 chunkscanner 的 jar 放进 run/mods/。
-	modCompileOnly "${project.chunkscanner_group}:${project.chunkscanner_artifact}:${project.chunkscanner_version}"
 }
 
 processResources {

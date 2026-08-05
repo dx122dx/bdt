@@ -38,7 +38,8 @@
     "billy-inf.msg.config_set": "已设置 %s：%s → %s",
     "billy-inf.msg.config_reset": "已重置 %s：%s → %s",
     "billy-inf.msg.config_error": "配置 %s 错误：%s",
-    "billy-inf.msg.config_set_usage": "用法：/inf config set <模块:路径> <值>",
+    "billy-inf.msg.config_set_usage": "用法：/inf config set <模块> <路径=值> [路径=值 ...]",
+    "billy-inf.msg.config_set_need_value": "配置 %s 缺少 = 值，请使用 路径=值 的形式",
 
     "billy-inf.gui.title": "Billy's Mod infrastructure",
     "billy-inf.gui.category.general": "通用设置",
@@ -54,19 +55,5 @@
     "text.autoconfig.billy-inf.option.verboseLogging": "详细日志",
     "text.autoconfig.billy-inf.option.verboseLogging.@Tooltip": "输出调试框架的详细日志，包括注册明细与动作执行轨迹。",
     "text.autoconfig.billy-inf.option.showActionStackTrace": "显示异常堆栈",
-    "text.autoconfig.billy-inf.option.showActionStackTrace.@Tooltip": "调试动作执行失败时，在聊天栏附加异常堆栈摘要（最多 5 帧）。",
-
-    "billy-inf.feature.cs.configuration-locker.unlock.name": "解锁全部配置",
-    "billy-inf.feature.cs.configuration-locker.unlock.desc": "让 ConfigurationLocker 认为所有配置项都未被锁定（isLocked 返回 false、getValueLocked 返回 null）。配合「禁用强制重放」可完全绕过服务端配置锁定。",
-    "billy-inf.feature.cs.configuration-locker.disable-apply-all.name": "禁用配置强制重放",
-    "billy-inf.feature.cs.configuration-locker.disable-apply-all.desc": "禁用 ConfigurationLocker.applyAll，使已锁定的值不再被强制写入活动配置。仅阻止重放，不解除「禁止修改」标记。",
-
-    "billy-inf.action.cs.configuration-locker.set-authorized.name": "模拟授权配置",
-    "billy-inf.action.cs.configuration-locker.set-authorized.desc": "调用 ConfigurationLocker.setAuthorized，按给定路径解除锁定，模拟服务器已授权。可一次传入多个路径。",
-    "billy-inf.action.cs.configuration-locker.set-locked.name": "模拟锁定配置",
-    "billy-inf.action.cs.configuration-locker.set-locked.desc": "调用 ConfigurationLocker.setLocked，按 路径=值 锁定并立即强制重放。省略值表示仅锁定无强制值。",
-    "billy-inf.action.cs.configuration-locker.enter-server.name": "模拟进入服务器",
-    "billy-inf.action.cs.configuration-locker.enter-server.desc": "调用 ConfigurationLocker.enterServerLock，按默认受保护配置进行锁定（等待授权状态）。无参数。",
-    "billy-inf.action.cs.configuration-locker.leave-server.name": "模拟离开服务器",
-    "billy-inf.action.cs.configuration-locker.leave-server.desc": "调用 ConfigurationLocker.leaveServerLock，清空全部锁定登记、恢复自由配置。无参数。"
+    "text.autoconfig.billy-inf.option.showActionStackTrace.@Tooltip": "调试动作执行失败时，在聊天栏附加异常堆栈摘要（最多 5 帧）。"
 }
