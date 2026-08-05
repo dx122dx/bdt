@@ -6,11 +6,11 @@ import java.util.List;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
 
 /**
  * 模块扩展点接口。任何希望以「模块」身份接入 billy-inf 的组件都应实现本接口，
- * 并通过 {@link ModuleRegistry#register(IModule)} 完成登记。
+ * 并通过 {@link ModuleRegistry#register(IModule)} 显式登记，或由
+ * {@link ModuleRegistry#discover()} 基于 Java SPI（META-INF/services）自动发现并登记。
  *
  * <p>登记是「一次声明全部能力」：模块 id / 版本 / 名称 / 描述（强制），
  * 以及可选的配置对象（{@link #getConfig()}）与命令树（{@link #buildCommands()}）。
@@ -22,8 +22,11 @@ import net.minecraft.util.Identifier;
  */
 public interface IModule {
 
-    /** 模块唯一标识。建议命名空间与所属 mod 一致（如 {@code billy-inf:debugger}）。 */
-    Identifier getId();
+    /**
+     * 模块唯一标识。自由格式字符串，建议命名空间与所属 mod 一致
+     * （如 {@code billy-inf:debugger}）。作为配置 / 命令 / 贡献报告的反查主键。
+     */
+    String getId();
 
     /** 模块版本字符串（自由格式，如 {@code 1.0.0}）。 */
     String getVersion();

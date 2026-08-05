@@ -26,6 +26,8 @@
     "billy-inf.msg.info_name": "Name: ",
     "billy-inf.msg.info_contrib_commands": "Commands contributed:",
     "billy-inf.msg.info_contrib_configs": "Config paths:",
+    "billy-inf.msg.module_debugger_name": "Debugger",
+    "billy-inf.msg.module_debugger_desc": "Built-in debug module: run debug actions, toggle debug features, and inspect them via the /inf dbg command tree.",
 
     "billy-inf.msg.module_not_found": "Module not found: %s",
     "billy-inf.msg.module_config_none": "Module %s has no registered config.",

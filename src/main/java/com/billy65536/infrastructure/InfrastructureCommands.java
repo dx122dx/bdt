@@ -7,7 +7,6 @@ import com.billy65536.infrastructure.core.module.IModule;
 import com.billy65536.infrastructure.core.module.ModuleCommandRegistrar;
 import com.billy65536.infrastructure.core.module.ModuleConfigReflectionAccessor;
 import com.billy65536.infrastructure.core.module.ModuleRegistry;
-import com.billy65536.infrastructure.debugger.DebuggerCommands;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -19,7 +18,6 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
-import net.minecraft.util.Identifier;
 
 /**
  * {@code /inf} 根命令的注册与构建。
@@ -27,10 +25,9 @@ import net.minecraft.util.Identifier;
  * <p>根命令为 {@code /inf}（亦可作为 {@code /billy-inf:inf} 调用，两者等价）。
  * 提供以下子命令：</p>
  * <ul>
- *   <li>{@code dbg} —— 调试子模块命令树（见 {@link DebuggerCommands}）</li>
  *   <li>{@code config} —— 模块配置统一访问（{@code get|set|reset <moduleId:path>}）</li>
  *   <li>{@code info} —— 显示模组自身信息及全部已注册模块概览 / 指定模块详情</li>
- *   <li>各模块通过 {@link ModuleCommandRegistrar} 登记的命令节点（如 {@code /inf dbg} 之外的其它模块）</li>
+ *   <li>各模块通过 {@link ModuleCommandRegistrar} 登记的命令节点（如 debugger 的 {@code /inf dbg}）</li>
  * </ul>
  *
  * <p>模块命令节点由 {@link ModuleRegistry#register(IModule)} 在模块登记时统一挂入登记器，
@@ -43,7 +40,6 @@ public final class InfrastructureCommands {
     public static void register() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
             LiteralArgumentBuilder<FabricClientCommandSource> root = ClientCommandManager.literal("inf");
-            root.then(DebuggerCommands.buildDbgCommands());
             root.then(buildConfigCommand());
             root.then(buildInfoCommand());
             // 挂载各模块登记的命令节点（登记已在 ModuleRegistry.register 时完成）
@@ -94,39 +90,34 @@ public final class InfrastructureCommands {
         return new String[] { target.substring(0, idx), target.substring(idx + 1) };
     }
 
-    /** 模块标识符归一到 billy-inf 命名空间（裸名 → billy-inf:裸名）。 */
-    private static Identifier normalizeModuleId(String raw) {
+    /** 模块 id 为无命名空间的纯名称（如 {@code debugger}），原样使用；空值返回 null。 */
+    private static String normalizeModuleId(String raw) {
         if (raw == null || raw.isEmpty()) return null;
-        int colon = raw.indexOf(':');
-        if (colon >= 0) {
-            // 显式带命名空间：原样保留（new Identifier 构造）
-            return new Identifier(raw.substring(0, colon), raw.substring(colon + 1));
-        }
-        return InfrastructureMod.id(raw);
+        return raw;
     }
 
     private static int configGet(net.minecraft.client.MinecraftClient client, String target) {
         String[] parts = splitTarget(target);
-        Identifier moduleId = normalizeModuleId(parts[0]);
+        String moduleId = normalizeModuleId(parts[0]);
         String path = parts[1];
         IModule module = (moduleId == null) ? null : ModuleRegistry.get(moduleId);
         if (module == null || module.getConfig() == null) {
             send(client, Text.translatable("billy-inf.msg.module_config_none",
-                            moduleId == null ? "?" : moduleId.toString())
+                            moduleId == null ? "?" : moduleId)
                     .formatted(Formatting.RED));
             return 0;
         }
         Object config = module.getConfig();
         if (!ModuleConfigReflectionAccessor.hasPath(config, path)) {
             send(client, Text.translatable("billy-inf.msg.config_path_unknown",
-                            moduleId.toString() + ":" + path)
+                            moduleId + ":" + path)
                     .formatted(Formatting.RED));
             return 0;
         }
         Object value = ModuleConfigReflectionAccessor.getValue(config, path);
         Object def = ModuleConfigReflectionAccessor.getDefaultValue(config, path);
         MutableText out = Text.literal("")
-                .append(Text.literal(moduleId.toString() + ":" + path)
+                .append(Text.literal(moduleId + ":" + path)
                         .formatted(Formatting.GOLD))
                 .append(Text.literal(" = ").formatted(Formatting.GRAY))
                 .append(Text.literal(String.valueOf(value)).formatted(Formatting.AQUA))
@@ -142,19 +133,19 @@ public final class InfrastructureCommands {
 
     private static int configSet(net.minecraft.client.MinecraftClient client, String target, String value) {
         String[] parts = splitTarget(target);
-        Identifier moduleId = normalizeModuleId(parts[0]);
+        String moduleId = normalizeModuleId(parts[0]);
         String path = parts[1];
         IModule module = (moduleId == null) ? null : ModuleRegistry.get(moduleId);
         if (module == null || module.getConfig() == null) {
             send(client, Text.translatable("billy-inf.msg.module_config_none",
-                            moduleId == null ? "?" : moduleId.toString())
+                            moduleId == null ? "?" : moduleId)
                     .formatted(Formatting.RED));
             return 0;
         }
         Object config = module.getConfig();
         if (!ModuleConfigReflectionAccessor.hasPath(config, path)) {
             send(client, Text.translatable("billy-inf.msg.config_path_unknown",
-                            moduleId.toString() + ":" + path)
+                            moduleId + ":" + path)
                     .formatted(Formatting.RED));
             return 0;
         }
@@ -163,13 +154,13 @@ public final class InfrastructureCommands {
             ModuleConfigReflectionAccessor.setValue(config, path, value);
             module.saveConfig();
             send(client, Text.translatable("billy-inf.msg.config_set",
-                            Text.literal(moduleId.toString() + ":" + path).formatted(Formatting.GOLD),
+                            Text.literal(moduleId + ":" + path).formatted(Formatting.GOLD),
                             Text.literal(String.valueOf(old)).formatted(Formatting.GRAY),
                             Text.literal(value).formatted(Formatting.GREEN)));
             return 1;
         } catch (ModuleConfigReflectionAccessor.ConfigAccessException e) {
             send(client, Text.translatable("billy-inf.msg.config_error",
-                            moduleId.toString() + ":" + path, e.getMessage())
+                            moduleId + ":" + path, e.getMessage())
                     .formatted(Formatting.RED));
             return 0;
         }
@@ -177,19 +168,19 @@ public final class InfrastructureCommands {
 
     private static int configReset(net.minecraft.client.MinecraftClient client, String target) {
         String[] parts = splitTarget(target);
-        Identifier moduleId = normalizeModuleId(parts[0]);
+        String moduleId = normalizeModuleId(parts[0]);
         String path = parts[1];
         IModule module = (moduleId == null) ? null : ModuleRegistry.get(moduleId);
         if (module == null || module.getConfig() == null) {
             send(client, Text.translatable("billy-inf.msg.module_config_none",
-                            moduleId == null ? "?" : moduleId.toString())
+                            moduleId == null ? "?" : moduleId)
                     .formatted(Formatting.RED));
             return 0;
         }
         Object config = module.getConfig();
         if (!ModuleConfigReflectionAccessor.hasPath(config, path)) {
             send(client, Text.translatable("billy-inf.msg.config_path_unknown",
-                            moduleId.toString() + ":" + path)
+                            moduleId + ":" + path)
                     .formatted(Formatting.RED));
             return 0;
         }
@@ -198,14 +189,14 @@ public final class InfrastructureCommands {
             ModuleConfigReflectionAccessor.resetValue(config, path);
             module.saveConfig();
             send(client, Text.translatable("billy-inf.msg.config_reset",
-                            Text.literal(moduleId.toString() + ":" + path).formatted(Formatting.GOLD),
+                            Text.literal(moduleId + ":" + path).formatted(Formatting.GOLD),
                             Text.literal(String.valueOf(old)).formatted(Formatting.GRAY),
                             Text.literal(String.valueOf(ModuleConfigReflectionAccessor.getValue(config, path)))
                                     .formatted(Formatting.GREEN)));
             return 1;
         } catch (ModuleConfigReflectionAccessor.ConfigAccessException e) {
             send(client, Text.translatable("billy-inf.msg.config_error",
-                            moduleId.toString() + ":" + path, e.getMessage())
+                            moduleId + ":" + path, e.getMessage())
                     .formatted(Formatting.RED));
             return 0;
         }
@@ -218,10 +209,10 @@ public final class InfrastructureCommands {
                 for (IModule module : ModuleRegistry.getAll()) {
                     Object config = module.getConfig();
                     if (config == null) continue;
-                    String moduleStr = module.getId().toString().toLowerCase();
+                    String moduleStr = module.getId().toLowerCase();
                     if (!moduleStr.startsWith(remaining) && !remaining.startsWith(moduleStr)) continue;
                     for (String path : ModuleConfigReflectionAccessor.listPaths(config)) {
-                        String full = module.getId().toString() + ":" + path;
+                        String full = module.getId() + ":" + path;
                         if (full.toLowerCase().startsWith(remaining)) {
                             builder.suggest(full);
                         }
@@ -247,7 +238,7 @@ public final class InfrastructureCommands {
             (ctx, builder) -> {
                 String remaining = builder.getRemaining().toLowerCase();
                 for (IModule m : ModuleRegistry.getAll()) {
-                    String id = m.getId().toString();
+                    String id = m.getId();
                     if (id.toLowerCase().startsWith(remaining)) {
                         builder.suggest(id);
                     }
@@ -276,7 +267,7 @@ public final class InfrastructureCommands {
         } else {
             for (IModule m : ModuleRegistry.getAll()) {
                 out = out.append(Text.literal("  - ")
-                                .append(Text.literal(m.getId().toString()).formatted(Formatting.AQUA))
+                                .append(Text.literal(m.getId()).formatted(Formatting.AQUA))
                                 .append(Text.literal(" (v" + m.getVersion() + ")").formatted(Formatting.GRAY))
                                 .append(Text.literal(": ").formatted(Formatting.DARK_GRAY))
                                 .append(m.getName().copy().formatted(Formatting.GRAY)))
@@ -288,7 +279,7 @@ public final class InfrastructureCommands {
     }
 
     private static int showModuleInfo(net.minecraft.client.MinecraftClient client, String rawModuleId) {
-        Identifier moduleId = normalizeModuleId(rawModuleId);
+        String moduleId = normalizeModuleId(rawModuleId);
         IModule module = (moduleId == null) ? null : ModuleRegistry.get(moduleId);
         if (module == null) {
             send(client, Text.translatable("billy-inf.msg.module_not_found",
@@ -297,7 +288,7 @@ public final class InfrastructureCommands {
             return 0;
         }
         MutableText out = Text.literal("");
-        out = out.append(Text.literal(module.getId().toString())
+        out = out.append(Text.literal(module.getId())
                 .formatted(Formatting.GOLD, Formatting.BOLD)).append("\n");
         out = out.append(Text.literal("  ")
                 .append(Text.translatable("billy-inf.msg.info_version").formatted(Formatting.DARK_GRAY))

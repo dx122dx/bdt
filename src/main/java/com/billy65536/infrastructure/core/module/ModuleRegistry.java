@@ -2,12 +2,12 @@ package com.billy65536.infrastructure.core.module;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.ServiceLoader;
 
 import com.billy65536.infrastructure.InfrastructureMod;
-
-import net.minecraft.util.Identifier;
 
 /**
  * 全局模块注册表（静态单例）。
@@ -16,15 +16,25 @@ import net.minecraft.util.Identifier;
  * 元数据（id/版本/名称/描述）、配置对象（{@link IModule#getConfig()}）、
  * 以及命令子树（{@link IModule#buildCommands()}，由 {@link ModuleCommandRegistrar} 统一挂载）。</p>
  *
+ * <p>登记有两种途径：</p>
+ * <ul>
+ *   <li>显式：调用 {@link #register(IModule)}；</li>
+ *   <li>自动：调用 {@link #discover()}，基于 Java SPI 扫描
+ *       {@code META-INF/services/com.billy65536.infrastructure.core.module.IModule}，
+ *       发现全部 {@link IModule} 实现并登记。新增模块只需在 services 文件中加一行，
+ *       无需改动任何启动代码——这正是「模块注册统一处理」的落点。</li>
+ * </ul>
+ *
  * <p>沿用 {@code ActionRegistry} / {@link com.billy65536.infrastructure.debugger.core.feature.FeatureRegistry}
  * 的静态单例 + {@link LinkedHashMap} 模式；注册顺序决定 {@code /inf info} 列举与命令挂载的排列顺序。</p>
  *
  * <p>模块必须在 {@code InfrastructureCommands.register()} 之前完成登记
- * （初始化顺序步骤 3 由 BuiltinsManager 或其它启动代码调用 {@link #register(IModule)}）。</p>
+ * （初始化顺序由 {@link #discover()} 在命令注册前统一触发）。</p>
  */
 public final class ModuleRegistry {
 
-    private static final Map<Identifier, IModule> modules = new LinkedHashMap<>();
+    private static final Map<String, IModule> modules = new LinkedHashMap<>();
+    private static volatile boolean discovered = false;
 
     private ModuleRegistry() {}
 
@@ -41,7 +51,7 @@ public final class ModuleRegistry {
             InfrastructureMod.LOGGER.warn("Attempted to register null module or module with null ID, ignored");
             return;
         }
-        Identifier id = module.getId();
+        String id = module.getId();
         if (modules.containsKey(id)) {
             InfrastructureMod.LOGGER.warn("Module {} is already registered, overwriting", id);
         }
@@ -51,7 +61,7 @@ public final class ModuleRegistry {
     }
 
     /** 通过 id 获取模块，不存在返回 null。 */
-    public static IModule get(Identifier id) {
+    public static IModule get(String id) {
         return modules.get(id);
     }
 
@@ -63,5 +73,31 @@ public final class ModuleRegistry {
     /** 已登记模块数量。 */
     public static int size() {
         return modules.size();
+    }
+
+    /**
+     * 基于 Java SPI 自动发现并登记全部 {@link IModule} 实现。
+     *
+     * <p>扫描 {@code META-INF/services/com.billy65536.infrastructure.core.module.IModule} 中声明的实现类，
+     * 逐个实例化并登记。新增模块只需提供实现类并在该 services 文件中追加一行，
+     * 即可被自动纳入——启动代码无需任何改动。本方法幂等，仅执行一次。</p>
+     *
+     * <p>任一模块实现加载失败（如缺失依赖）仅记录并跳过，不阻断其它模块的登记。</p>
+     */
+    public static void discover() {
+        if (discovered) return;
+        discovered = true;
+        ServiceLoader<IModule> loader =
+                ServiceLoader.load(IModule.class, IModule.class.getClassLoader());
+        for (Iterator<IModule> it = loader.iterator(); it.hasNext(); ) {
+            IModule module;
+            try {
+                module = it.next();
+            } catch (java.util.ServiceConfigurationError e) {
+                InfrastructureMod.LOGGER.error("Failed to load a module service, skipping", e);
+                continue;
+            }
+            register(module);
+        }
     }
 }

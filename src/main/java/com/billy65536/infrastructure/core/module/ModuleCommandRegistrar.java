@@ -9,7 +9,6 @@ import com.billy65536.infrastructure.InfrastructureMod;
 
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.util.Identifier;
 
 /**
  * 模块命令统一登记器（静态单例）。
@@ -64,7 +63,7 @@ public final class ModuleCommandRegistrar {
     }
 
     private static void registerNode(String literal,
-            LiteralArgumentBuilder<FabricClientCommandSource> node, Identifier moduleId) {
+            LiteralArgumentBuilder<FabricClientCommandSource> node, String moduleId) {
         if (commandNodes.containsKey(literal)) {
             InfrastructureMod.LOGGER.warn(
                     "Module command literal '{}' (from {}) is already registered, overwriting", literal, moduleId);

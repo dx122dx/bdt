@@ -26,6 +26,8 @@
     "billy-inf.msg.info_name": "名称：",
     "billy-inf.msg.info_contrib_commands": "贡献的命令：",
     "billy-inf.msg.info_contrib_configs": "配置路径：",
+    "billy-inf.msg.module_debugger_name": "调试器",
+    "billy-inf.msg.module_debugger_desc": "内置调试模块：执行调试动作、开关调试特性，并通过 /inf dbg 命令树查看它们。",
 
     "billy-inf.msg.module_not_found": "未找到模块：%s",
     "billy-inf.msg.module_config_none": "模块 %s 未注册配置。",
