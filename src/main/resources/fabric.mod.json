@@ -8,7 +8,8 @@
 		"billy65536"
 	],
 	"contact": {
-		
+		"homepage": "https://github.com/dx122dx/bdt",
+        "sources": "https://github.com/dx122dx/bdt"
 	},
 	"license": "AGPL-3.0-only",
 	"icon": "assets/bdt/icon.png",
