@@ -1,5 +1,7 @@
 package com.billy65536.chunkscanner.debugger.core.action;
 
+import java.util.List;
+
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
@@ -37,4 +39,21 @@ public interface IDebugAction {
      * @throws Exception 任何执行失败，将由命令层捕获并反馈给玩家
      */
     void execute(MinecraftClient client, String[] args) throws Exception;
+
+    /**
+     * 为当前正在输入的参数提供补全候选。
+     *
+     * <p>默认返回空列表（无补全）。实现方按 {@code args} 的长度判断当前位于第几个
+     * 参数位，返回该位置的候选值即可——框架负责前缀过滤与拼接，实现方无需自行过滤。</p>
+     *
+     * <p>示例：{@code args = ["components.qshop"]} 表示用户已输入完整的第 1 个参数并
+     * 正在输入第 2 个；{@code args = []} 表示正在输入第 1 个参数。</p>
+     *
+     * @param client 当前客户端实例
+     * @param args   当前已完整输入的参数（不含正在输入的那一段），不为 null
+     * @return 候选值列表，不应返回 null
+     */
+    default List<String> suggest(MinecraftClient client, String[] args) {
+        return List.of();
+    }
 }

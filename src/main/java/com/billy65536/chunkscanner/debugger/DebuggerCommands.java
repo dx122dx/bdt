@@ -68,6 +68,31 @@ public final class DebuggerCommands {
     private static final SuggestionProvider<FabricClientCommandSource> FEATURE_ID_SUGGESTIONS =
             idSuggestions(() -> FeatureRegistry.getAll().stream().map(IDebugFeature::getId).toList());
 
+    /**
+     * 动作参数节点的补全器：先按已输入的 id 找到对应动作，再委托其
+     * {@link IDebugAction#suggest} 提供候选，最后按正在输入片段做前缀过滤。
+     * 动作未注册或无候选时退化为无补全。
+     */
+    private static final SuggestionProvider<FabricClientCommandSource> ACTION_ARGS_SUGGESTIONS =
+            (ctx, builder) -> {
+                String idArg = StringArgumentType.getString(ctx, "id");
+                IDebugAction action = ActionRegistry.get(CsDebuggerMod.id(idArg));
+                if (action == null) {
+                    return builder.buildFuture();
+                }
+                // 已完整输入的参数（不含正在输入的那一段），交由动作判断当前参数位
+                String rawArgs = builder.getInput()
+                        .substring(builder.getInput().length() - builder.getRemaining().length());
+                String[] completed = ArgTokenizer.tokenize(rawArgs);
+                String remaining = builder.getRemaining().toLowerCase();
+                for (String candidate : action.suggest(ctx.getSource().getClient(), completed)) {
+                    if (candidate.toLowerCase().startsWith(remaining)) {
+                        builder.suggest(candidate);
+                    }
+                }
+                return builder.buildFuture();
+            };
+
     // ==================== 命令构建 ====================
 
     /**
@@ -86,6 +111,7 @@ public final class DebuggerCommands {
                         .suggests(ACTION_ID_SUGGESTIONS)
                         // 带参数形式：args 用 greedyString 整串接收后再做引号感知分词
                         .then(ClientCommandManager.argument("args", StringArgumentType.greedyString())
+                                .suggests(ACTION_ARGS_SUGGESTIONS)
                                 .executes(ctx -> runAction(
                                         ctx.getSource().getClient(),
                                         StringArgumentType.getString(ctx, "id"),
