@@ -24,7 +24,7 @@ import net.minecraft.util.Identifier;
 @Mixin(ConfigurationLocker.class)
 public abstract class CsUnlockConfigurationLockerMixin {
 
-    private static final Identifier FEATURE = CsDebuggerMod.id("csUnlockConfigurationLocker");
+    private static final Identifier FEATURE = CsDebuggerMod.id("cs.configuration-locker.unlock");
 
     @Inject(method = "isLocked", at = @At("HEAD"), cancellable = true)
     private static void dbgUnlockIsLocked(String path, CallbackInfoReturnable<Boolean> cir) {

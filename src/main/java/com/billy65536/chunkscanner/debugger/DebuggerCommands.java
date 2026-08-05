@@ -352,6 +352,7 @@ public final class DebuggerCommands {
     private static Identifier parseIdentifier(String arg) {
         if (arg == null || arg.isEmpty()) return CsDebuggerMod.id("unknown");
         Identifier parsed = Identifier.tryParse(arg);
-        return (parsed != null) ? parsed : CsDebuggerMod.id(arg);
+        if (parsed != null) return parsed;
+        return CsDebuggerMod.id(arg.toLowerCase());
     }
 }

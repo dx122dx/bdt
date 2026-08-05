@@ -15,7 +15,7 @@ import net.minecraft.util.Identifier;
  */
 public class DisableApplyAllFeature implements IDebugFeature {
 
-    public static final Identifier ID = CsDebuggerMod.id("csDisableConfigurationLockerApplyAll");
+    public static final Identifier ID = CsDebuggerMod.id("cs.configuration-locker.disable-apply-all");
 
     @Override
     public Identifier getId() {
@@ -24,11 +24,11 @@ public class DisableApplyAllFeature implements IDebugFeature {
 
     @Override
     public Text getName() {
-        return Text.translatable("chunkscanner-debugger.feature.csDisableConfigurationLockerApplyAll.name");
+        return Text.translatable("chunkscanner-debugger.feature.cs.configuration-locker.disable-apply-all.name");
     }
 
     @Override
     public Text getDescription() {
-        return Text.translatable("chunkscanner-debugger.feature.csDisableConfigurationLockerApplyAll.desc");
+        return Text.translatable("chunkscanner-debugger.feature.cs.configuration-locker.disable-apply-all.desc");
     }
 }

@@ -30,7 +30,7 @@ import net.minecraft.util.Identifier;
  */
 public class SetLockedAction implements IDebugAction {
 
-    public static final Identifier ID = CsDebuggerMod.id("csConfigurationLockerSetLocked");
+    public static final Identifier ID = CsDebuggerMod.id("cs.configuration-locker.set-locked");
 
     @Override
     public Identifier getId() {
@@ -39,12 +39,12 @@ public class SetLockedAction implements IDebugAction {
 
     @Override
     public Text getName() {
-        return Text.translatable("chunkscanner-debugger.action.csConfigurationLockerSetLocked.name");
+        return Text.translatable("chunkscanner-debugger.action.cs.configuration-locker.set-locked.name");
     }
 
     @Override
     public Text getDescription() {
-        return Text.translatable("chunkscanner-debugger.action.csConfigurationLockerSetLocked.desc");
+        return Text.translatable("chunkscanner-debugger.action.cs.configuration-locker.set-locked.desc");
     }
 
     @Override

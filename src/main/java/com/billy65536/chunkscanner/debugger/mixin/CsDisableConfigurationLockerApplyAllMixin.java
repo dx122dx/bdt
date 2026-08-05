@@ -25,7 +25,7 @@ import net.minecraft.util.Identifier;
 @Mixin(ConfigurationLocker.class)
 public abstract class CsDisableConfigurationLockerApplyAllMixin {
 
-    private static final Identifier FEATURE = CsDebuggerMod.id("csDisableConfigurationLockerApplyAll");
+    private static final Identifier FEATURE = CsDebuggerMod.id("cs.configuration-locker.disable-apply-all");
 
     @Inject(method = "applyAll", at = @At("HEAD"), cancellable = true)
     private static void dbgDisableApplyAll(ChunkScannerConfig config, CallbackInfo ci) {

@@ -22,7 +22,7 @@ import net.minecraft.util.Identifier;
  */
 public class SetAuthorizedAction implements IDebugAction {
 
-    public static final Identifier ID = CsDebuggerMod.id("csConfigurationLockerSetAuthorized");
+    public static final Identifier ID = CsDebuggerMod.id("cs.configuration-locker.set-authorized");
 
     @Override
     public Identifier getId() {
@@ -31,12 +31,12 @@ public class SetAuthorizedAction implements IDebugAction {
 
     @Override
     public Text getName() {
-        return Text.translatable("chunkscanner-debugger.action.csConfigurationLockerSetAuthorized.name");
+        return Text.translatable("chunkscanner-debugger.action.cs.configuration-locker.set-authorized.name");
     }
 
     @Override
     public Text getDescription() {
-        return Text.translatable("chunkscanner-debugger.action.csConfigurationLockerSetAuthorized.desc");
+        return Text.translatable("chunkscanner-debugger.action.cs.configuration-locker.set-authorized.desc");
     }
 
     @Override

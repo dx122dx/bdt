@@ -16,7 +16,7 @@ import net.minecraft.util.Identifier;
  */
 public class EnterServerAction implements IDebugAction {
 
-    public static final Identifier ID = CsDebuggerMod.id("csConfigurationLockerEnterServer");
+    public static final Identifier ID = CsDebuggerMod.id("cs.configuration-locker.enter-server");
 
     @Override
     public Identifier getId() {
@@ -25,12 +25,12 @@ public class EnterServerAction implements IDebugAction {
 
     @Override
     public Text getName() {
-        return Text.translatable("chunkscanner-debugger.action.csConfigurationLockerEnterServer.name");
+        return Text.translatable("chunkscanner-debugger.action.cs.configuration-locker.enter-server.name");
     }
 
     @Override
     public Text getDescription() {
-        return Text.translatable("chunkscanner-debugger.action.csConfigurationLockerEnterServer.desc");
+        return Text.translatable("chunkscanner-debugger.action.cs.configuration-locker.enter-server.desc");
     }
 
     @Override

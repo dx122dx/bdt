@@ -33,9 +33,9 @@ public class CsDebuggerMod implements ClientModInitializer {
 
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-	/** 构造本模组命名空间下的 {@link Identifier}。 */
+	/** 构造本模组命名空间下的 {@link Identifier}。*/
 	public static Identifier id(String path) {
-		return Identifier.of(MOD_ID, path);
+		return new Identifier(MOD_ID, path);
 	}
 
 	@Override

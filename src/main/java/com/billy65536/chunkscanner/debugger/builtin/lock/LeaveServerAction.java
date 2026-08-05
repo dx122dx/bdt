@@ -15,7 +15,7 @@ import net.minecraft.util.Identifier;
  */
 public class LeaveServerAction implements IDebugAction {
 
-    public static final Identifier ID = CsDebuggerMod.id("csConfigurationLockerLeaveServer");
+    public static final Identifier ID = CsDebuggerMod.id("cs.configuration-locker.leave-server");
 
     @Override
     public Identifier getId() {
@@ -24,12 +24,12 @@ public class LeaveServerAction implements IDebugAction {
 
     @Override
     public Text getName() {
-        return Text.translatable("chunkscanner-debugger.action.csConfigurationLockerLeaveServer.name");
+        return Text.translatable("chunkscanner-debugger.action.cs.configuration-locker.leave-server.name");
     }
 
     @Override
     public Text getDescription() {
-        return Text.translatable("chunkscanner-debugger.action.csConfigurationLockerLeaveServer.desc");
+        return Text.translatable("chunkscanner-debugger.action.cs.configuration-locker.leave-server.desc");
     }
 
     @Override

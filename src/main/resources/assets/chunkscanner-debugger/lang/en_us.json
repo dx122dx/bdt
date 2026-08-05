@@ -29,17 +29,17 @@
     "text.autoconfig.chunkscanner-debugger.option.showActionStackTrace": "Show Stack Trace",
     "text.autoconfig.chunkscanner-debugger.option.showActionStackTrace.@Tooltip": "Append an exception stack trace summary (up to 5 frames) to chat when a debug action fails.",
 
-    "chunkscanner-debugger.feature.csUnlockConfigurationLocker.name": "Unlock All Config",
-    "chunkscanner-debugger.feature.csUnlockConfigurationLocker.desc": "Makes ConfigurationLocker treat every config item as unlocked (isLocked returns false, getValueLocked returns null). Combined with 'Disable Apply All' this bypasses server config locking entirely.",
-    "chunkscanner-debugger.feature.csDisableConfigurationLockerApplyAll.name": "Disable ConfigurationLocker Apply All",
-    "chunkscanner-debugger.feature.csDisableConfigurationLockerApplyAll.desc": "Disables ConfigurationLocker.applyAll so locked values are no longer force-written to the active config. Only blocks replay; does not clear the 'modification forbidden' flag.",
+    "chunkscanner-debugger.feature.cs.configuration-locker.unlock.name": "Unlock All Config",
+    "chunkscanner-debugger.feature.cs.configuration-locker.unlock.desc": "Makes ConfigurationLocker treat every config item as unlocked (isLocked returns false, getValueLocked returns null). Combined with 'Disable Apply All' this bypasses server config locking entirely.",
+    "chunkscanner-debugger.feature.cs.configuration-locker.disable-apply-all.name": "Disable ConfigurationLocker Apply All",
+    "chunkscanner-debugger.feature.cs.configuration-locker.disable-apply-all.desc": "Disables ConfigurationLocker.applyAll so locked values are no longer force-written to the active config. Only blocks replay; does not clear the 'modification forbidden' flag.",
 
-    "chunkscanner-debugger.action.csConfigurationLockerSetAuthorized.name": "Simulate Cofig Authorization",
-    "chunkscanner-debugger.action.csConfigurationLockerSetAuthorized.desc": "Calls ConfigurationLocker.setAuthorized to unlock the given paths, simulating server authorization. Accepts multiple paths at once.",
-    "chunkscanner-debugger.action.csConfigurationLockerSetLocked.name": "Simulate Config Lock",
-    "chunkscanner-debugger.action.csConfigurationLockerSetLocked.desc": "Calls ConfigurationLocker.setLocked to lock and immediately replay path=value. Omitting the value means lock without a forced value.",
-    "chunkscanner-debugger.action.csConfigurationLockerEnterServer.name": "Simulate Enter Server",
-    "chunkscanner-debugger.action.csConfigurationLockerEnterServer.desc": "Calls ConfigurationLocker.enterServerLock to lock the default protected config (awaiting authorization). No arguments.",
-    "chunkscanner-debugger.action.csConfigurationLockerLeaveServer.name": "Simulate Leave Server",
-    "chunkscanner-debugger.action.csConfigurationLockerLeaveServer.desc": "Calls ConfigurationLocker.leaveServerLock to clear all lock entries and restore free config. No arguments."
+    "chunkscanner-debugger.action.cs.configuration-locker.set-authorized.name": "Simulate Cofig Authorization",
+    "chunkscanner-debugger.action.cs.configuration-locker.set-authorized.desc": "Calls ConfigurationLocker.setAuthorized to unlock the given paths, simulating server authorization. Accepts multiple paths at once.",
+    "chunkscanner-debugger.action.cs.configuration-locker.set-locked.name": "Simulate Config Lock",
+    "chunkscanner-debugger.action.cs.configuration-locker.set-locked.desc": "Calls ConfigurationLocker.setLocked to lock and immediately replay path=value. Omitting the value means lock without a forced value.",
+    "chunkscanner-debugger.action.cs.configuration-locker.enter-server.name": "Simulate Enter Server",
+    "chunkscanner-debugger.action.cs.configuration-locker.enter-server.desc": "Calls ConfigurationLocker.enterServerLock to lock the default protected config (awaiting authorization). No arguments.",
+    "chunkscanner-debugger.action.cs.configuration-locker.leave-server.name": "Simulate Leave Server",
+    "chunkscanner-debugger.action.cs.configuration-locker.leave-server.desc": "Calls ConfigurationLocker.leaveServerLock to clear all lock entries and restore free config. No arguments."
 }

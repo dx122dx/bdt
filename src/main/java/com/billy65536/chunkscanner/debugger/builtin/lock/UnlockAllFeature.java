@@ -15,7 +15,7 @@ import net.minecraft.util.Identifier;
  */
 public class UnlockAllFeature implements IDebugFeature {
 
-    public static final Identifier ID = CsDebuggerMod.id("csUnlockConfigurationLocker");
+    public static final Identifier ID = CsDebuggerMod.id("cs.configuration-locker.unlock");
 
     @Override
     public Identifier getId() {
@@ -24,11 +24,11 @@ public class UnlockAllFeature implements IDebugFeature {
 
     @Override
     public Text getName() {
-        return Text.translatable("chunkscanner-debugger.feature.csUnlockConfigurationLocker.name");
+        return Text.translatable("chunkscanner-debugger.feature.cs.configuration-locker.unlock.name");
     }
 
     @Override
     public Text getDescription() {
-        return Text.translatable("chunkscanner-debugger.feature.csUnlockConfigurationLocker.desc");
+        return Text.translatable("chunkscanner-debugger.feature.cs.configuration-locker.unlock.desc");
     }
 }
