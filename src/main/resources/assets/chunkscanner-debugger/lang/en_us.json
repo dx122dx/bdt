@@ -24,5 +24,15 @@
     "text.autoconfig.chunkscanner-debugger.option.verboseLogging": "Verbose Logging",
     "text.autoconfig.chunkscanner-debugger.option.verboseLogging.@Tooltip": "Log detailed framework information, including registration details and action execution traces.",
     "text.autoconfig.chunkscanner-debugger.option.showActionStackTrace": "Show Stack Trace",
-    "text.autoconfig.chunkscanner-debugger.option.showActionStackTrace.@Tooltip": "Append an exception stack trace summary (up to 5 frames) to chat when a debug action fails."
+    "text.autoconfig.chunkscanner-debugger.option.showActionStackTrace.@Tooltip": "Append an exception stack trace summary (up to 5 frames) to chat when a debug action fails.",
+
+    "chunkscanner-debugger.feature.csUnlockConfigurationLocker.name": "Unlock All Config",
+    "chunkscanner-debugger.feature.csUnlockConfigurationLocker.desc": "Makes ConfigurationLocker treat every config item as unlocked (isLocked returns false, getValueLocked returns null). Combined with 'Disable Apply All' this bypasses server config locking entirely.",
+    "chunkscanner-debugger.feature.csDisableConfigurationLockerApplyAll.name": "Disable ConfigurationLocker Apply All",
+    "chunkscanner-debugger.feature.csDisableConfigurationLockerApplyAll.desc": "Disables ConfigurationLocker.applyAll so locked values are no longer force-written to the active config. Only blocks replay; does not clear the 'modification forbidden' flag.",
+
+    "chunkscanner-debugger.action.csConfigurationLockerSetAuthorized.name": "Simulate Cofig Authorization",
+    "chunkscanner-debugger.action.csConfigurationLockerSetAuthorized.desc": "Calls ConfigurationLocker.setAuthorized to unlock the given paths, simulating server authorization. Accepts multiple paths at once.",
+    "chunkscanner-debugger.action.csConfigurationLockerSetLocked.name": "Simulate Config Lock",
+    "chunkscanner-debugger.action.csConfigurationLockerSetLocked.desc": "Calls ConfigurationLocker.setLocked to lock and immediately replay path=value. Omitting the value means lock without a forced value."
 }

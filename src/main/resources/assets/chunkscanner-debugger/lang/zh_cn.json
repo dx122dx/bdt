@@ -24,5 +24,15 @@
     "text.autoconfig.chunkscanner-debugger.option.verboseLogging": "详细日志",
     "text.autoconfig.chunkscanner-debugger.option.verboseLogging.@Tooltip": "输出调试框架的详细日志，包括注册明细与动作执行轨迹。",
     "text.autoconfig.chunkscanner-debugger.option.showActionStackTrace": "显示异常堆栈",
-    "text.autoconfig.chunkscanner-debugger.option.showActionStackTrace.@Tooltip": "调试动作执行失败时，在聊天栏附加异常堆栈摘要（最多 5 帧）。"
+    "text.autoconfig.chunkscanner-debugger.option.showActionStackTrace.@Tooltip": "调试动作执行失败时，在聊天栏附加异常堆栈摘要（最多 5 帧）。",
+
+    "chunkscanner-debugger.feature.csUnlockConfigurationLocker.name": "解锁全部配置",
+    "chunkscanner-debugger.feature.csUnlockConfigurationLocker.desc": "让 ConfigurationLocker 认为所有配置项都未被锁定（isLocked 返回 false、getValueLocked 返回 null）。配合「禁用强制重放」可完全绕过服务端配置锁定。",
+    "chunkscanner-debugger.feature.csDisableConfigurationLockerApplyAll.name": "禁用配置强制重放",
+    "chunkscanner-debugger.feature.csDisableConfigurationLockerApplyAll.desc": "禁用 ConfigurationLocker.applyAll，使已锁定的值不再被强制写入活动配置。仅阻止重放，不解除「禁止修改」标记。",
+
+    "chunkscanner-debugger.action.csConfigurationLockerSetAuthorized.name": "模拟授权配置",
+    "chunkscanner-debugger.action.csConfigurationLockerSetAuthorized.desc": "调用 ConfigurationLocker.setAuthorized，按给定路径解除锁定，模拟服务器已授权。可一次传入多个路径。",
+    "chunkscanner-debugger.action.csConfigurationLockerSetLocked.name": "模拟锁定配置",
+    "chunkscanner-debugger.action.csConfigurationLockerSetLocked.desc": "调用 ConfigurationLocker.setLocked，按 路径=值 锁定并立即强制重放。省略值表示仅锁定无强制值。"
 }

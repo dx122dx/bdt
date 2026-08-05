@@ -1,0 +1,13 @@
+{
+    "required": false,
+    "minVersion": "0.8",
+    "package": "com.billy65536.chunkscanner.debugger.mixin",
+    "compatibilityLevel": "JAVA_17",
+    "client": [
+        "CsDisableConfigurationLockerApplyAllMixin",
+        "CsUnlockConfigurationLockerMixin"
+    ],
+    "injectors": {
+        "defaultRequire": 1
+    }
+}

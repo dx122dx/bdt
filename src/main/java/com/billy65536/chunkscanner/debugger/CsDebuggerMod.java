@@ -7,6 +7,10 @@ import net.minecraft.util.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.billy65536.chunkscanner.debugger.builtin.lock.DisableApplyAllFeature;
+import com.billy65536.chunkscanner.debugger.builtin.lock.SetAuthorizedAction;
+import com.billy65536.chunkscanner.debugger.builtin.lock.SetLockedAction;
+import com.billy65536.chunkscanner.debugger.builtin.lock.UnlockAllFeature;
 import com.billy65536.chunkscanner.debugger.config.DebuggerConfigLoader;
 import com.billy65536.chunkscanner.debugger.config.FeatureStateStore;
 import com.billy65536.chunkscanner.debugger.core.action.ActionRegistry;
@@ -42,6 +46,14 @@ public class CsDebuggerMod implements ClientModInitializer {
 		// 加载特性启用状态（必须在任何 FeatureRegistry.register() 之前，
 		// 否则注册时读不到持久化记录，会误用默认值覆盖用户设置）
 		FeatureStateStore.load();
+
+		// ===== 内置调试单元：配置锁定相关 =====
+		// Feature：解锁全部 / 禁用 applyAll（实际拦截逻辑由 Mixin 注入 ConfigurationLocker）
+		FeatureRegistry.register(new UnlockAllFeature());
+		FeatureRegistry.register(new DisableApplyAllFeature());
+		// Action：模拟授权 / 模拟锁定（直接调用 ConfigurationLocker 静态方法）
+		ActionRegistry.register(new SetAuthorizedAction());
+		ActionRegistry.register(new SetLockedAction());
 
 		// 注册命令。Brigadier 对同名根 literal 执行子节点合并而非覆盖，
 		// 因此 dbg 分支会自动挂到主模组已建立的命令树上，主模组无需改动。

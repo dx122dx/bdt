@@ -31,5 +31,8 @@
 	},
 	"suggests": {
 		"modmenu": "*"
-	}
+	},
+	"mixins": [
+		"chunkscanner-debugger.mixins.json"
+	]
 }
