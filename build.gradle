@@ -62,6 +62,12 @@ dependencies {
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
+	// Cloth Config / AutoConfig 是必需依赖：
+	// AutoConfig 承载模组自身固定配置项，Cloth ConfigBuilder 构建 Feature 动态开关界面
+	modImplementation("me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}") {
+		exclude(group: "net.fabricmc.fabric-api")
+	}
+
 	// Chunk Scanner — 引用核心 API（如 IChunkDb.FactoryRegistry 工厂模式加载数据库）
 	// 版本号自动复用 ../chunkscanner/gradle.properties 的 mod_version
 	modImplementation "${project.chunkscanner_group}:${project.chunkscanner_artifact}:${project.chunkscanner_version}"

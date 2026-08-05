@@ -1,0 +1,28 @@
+{
+    "chunkscanner-debugger.msg.action_success": "Debug action completed: %s",
+    "chunkscanner-debugger.msg.action_failed": "Debug action %s failed: %s",
+    "chunkscanner-debugger.msg.action_not_found": "Debug action not found: %s",
+
+    "chunkscanner-debugger.msg.feature_status": "Debug feature %s is currently %s",
+    "chunkscanner-debugger.msg.feature_enabled": "Enabled debug feature: %s",
+    "chunkscanner-debugger.msg.feature_disabled": "Disabled debug feature: %s",
+    "chunkscanner-debugger.msg.feature_unchanged": "Debug feature %s is already %s, no change made.",
+    "chunkscanner-debugger.msg.feature_not_found": "Debug feature not found: %s",
+
+    "chunkscanner-debugger.msg.state_enabled": "enabled",
+    "chunkscanner-debugger.msg.state_disabled": "disabled",
+
+    "chunkscanner-debugger.msg.list_actions_title": "==== Debug Actions (%s) ====",
+    "chunkscanner-debugger.msg.list_features_title": "==== Debug Features (%s) ====",
+    "chunkscanner-debugger.msg.list_empty": "(none registered)",
+
+    "chunkscanner-debugger.gui.title": "ChunkScanner Debugger",
+    "chunkscanner-debugger.gui.category.features": "Debug Features",
+    "chunkscanner-debugger.gui.no_features": "No debug features are currently registered.",
+
+    "text.autoconfig.chunkscanner-debugger.title": "ChunkScanner Debugger Settings",
+    "text.autoconfig.chunkscanner-debugger.option.verboseLogging": "Verbose Logging",
+    "text.autoconfig.chunkscanner-debugger.option.verboseLogging.@Tooltip": "Log detailed framework information, including registration details and action execution traces.",
+    "text.autoconfig.chunkscanner-debugger.option.showActionStackTrace": "Show Stack Trace",
+    "text.autoconfig.chunkscanner-debugger.option.showActionStackTrace.@Tooltip": "Append an exception stack trace summary (up to 5 frames) to chat when a debug action fails."
+}

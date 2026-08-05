@@ -1,0 +1,28 @@
+{
+    "chunkscanner-debugger.msg.action_success": "调试动作执行完成：%s",
+    "chunkscanner-debugger.msg.action_failed": "调试动作 %s 执行失败：%s",
+    "chunkscanner-debugger.msg.action_not_found": "未找到调试动作：%s",
+
+    "chunkscanner-debugger.msg.feature_status": "调试特性 %s 当前状态：%s",
+    "chunkscanner-debugger.msg.feature_enabled": "已启用调试特性：%s",
+    "chunkscanner-debugger.msg.feature_disabled": "已禁用调试特性：%s",
+    "chunkscanner-debugger.msg.feature_unchanged": "调试特性 %s 已处于 %s 状态，无需变更。",
+    "chunkscanner-debugger.msg.feature_not_found": "未找到调试特性：%s",
+
+    "chunkscanner-debugger.msg.state_enabled": "已启用",
+    "chunkscanner-debugger.msg.state_disabled": "已禁用",
+
+    "chunkscanner-debugger.msg.list_actions_title": "==== 调试动作（%s）====",
+    "chunkscanner-debugger.msg.list_features_title": "==== 调试特性（%s）====",
+    "chunkscanner-debugger.msg.list_empty": "（暂无注册项）",
+
+    "chunkscanner-debugger.gui.title": "ChunkScanner 调试器",
+    "chunkscanner-debugger.gui.category.features": "调试特性",
+    "chunkscanner-debugger.gui.no_features": "当前没有已注册的调试特性。",
+
+    "text.autoconfig.chunkscanner-debugger.title": "ChunkScanner 调试器设置",
+    "text.autoconfig.chunkscanner-debugger.option.verboseLogging": "详细日志",
+    "text.autoconfig.chunkscanner-debugger.option.verboseLogging.@Tooltip": "输出调试框架的详细日志，包括注册明细与动作执行轨迹。",
+    "text.autoconfig.chunkscanner-debugger.option.showActionStackTrace": "显示异常堆栈",
+    "text.autoconfig.chunkscanner-debugger.option.showActionStackTrace.@Tooltip": "调试动作执行失败时，在聊天栏附加异常堆栈摘要（最多 5 帧）。"
+}
