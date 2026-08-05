@@ -71,9 +71,12 @@ dependencies {
 	// ModMenu 为可选依赖：仅编译期需要 API，运行时缺失不影响功能
 	modCompileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
 
-	// Chunk Scanner — 引用核心 API（如 IChunkDb.FactoryRegistry 工厂模式加载数据库）
-	// 版本号自动复用 ../chunkscanner/gradle.properties 的 mod_version
-	modImplementation "${project.chunkscanner_group}:${project.chunkscanner_artifact}:${project.chunkscanner_version}"
+	// Chunk Scanner 为可选依赖：仅编译 builtin.chunkscanner 内置包与其 Mixin 时需要 API，
+	// 运行时缺失不影响本模组启动（BuiltinsManager 会跳过该内置包，BdtMixinPlugin 会跳过其 Mixin）。
+	// 版本号自动复用 ../chunkscanner/gradle.properties 的 mod_version。
+	// 注意：因为是 compileOnly，runClient 开发环境不会自动加载 chunkscanner；
+	// 若需联调 builtin.chunkscanner 组件，请手工把 chunkscanner 的 jar 放进 run/mods/。
+	modCompileOnly "${project.chunkscanner_group}:${project.chunkscanner_artifact}:${project.chunkscanner_version}"
 }
 
 processResources {

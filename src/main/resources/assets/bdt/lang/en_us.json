@@ -1,0 +1,51 @@
+{
+    "bdt.msg.action_success": "Debug action completed: %s",
+    "bdt.msg.action_failed": "Debug action %s failed: %s",
+    "bdt.msg.action_not_found": "Debug action not found: %s",
+    "bdt.msg.action_info_id": "Debug action: %s",
+    "bdt.msg.action_info_name": "Name: ",
+    "bdt.msg.action_info_desc": "Description: ",
+
+    "bdt.msg.feature_status": "Debug feature %s is currently %s",
+    "bdt.msg.feature_enabled": "Enabled debug feature: %s",
+    "bdt.msg.feature_disabled": "Disabled debug feature: %s",
+    "bdt.msg.feature_unchanged": "Debug feature %s is already %s, no change made.",
+    "bdt.msg.feature_not_found": "Debug feature not found: %s",
+
+    "bdt.msg.state_enabled": "enabled",
+    "bdt.msg.state_disabled": "disabled",
+
+    "bdt.msg.list_actions_title": "==== Debug Actions (%s) ====",
+    "bdt.msg.list_features_title": "==== Debug Features (%s) ====",
+    "bdt.msg.list_empty": "(none registered)",
+
+    "bdt.gui.title": "Billy's Debug Tools",
+    "bdt.gui.category.general": "General",
+    "bdt.gui.category.features": "Debug Features",
+    "bdt.gui.no_features": "No debug features are currently registered.",
+
+    "bdt.gui.option.verbose_logging": "Verbose Logging",
+    "bdt.gui.option.verbose_logging.desc": "Log detailed framework information, including registration details and action execution traces.",
+    "bdt.gui.option.show_action_stack_trace": "Show Stack Trace",
+    "bdt.gui.option.show_action_stack_trace.desc": "Append an exception stack trace summary (up to 5 frames) to chat when a debug action fails.",
+
+    "text.autoconfig.bdt.title": "Billy's Debug Tools Settings",
+    "text.autoconfig.bdt.option.verboseLogging": "Verbose Logging",
+    "text.autoconfig.bdt.option.verboseLogging.@Tooltip": "Log detailed framework information, including registration details and action execution traces.",
+    "text.autoconfig.bdt.option.showActionStackTrace": "Show Stack Trace",
+    "text.autoconfig.bdt.option.showActionStackTrace.@Tooltip": "Append an exception stack trace summary (up to 5 frames) to chat when a debug action fails.",
+
+    "bdt.feature.cs.configuration-locker.unlock.name": "Unlock All Config",
+    "bdt.feature.cs.configuration-locker.unlock.desc": "Makes ConfigurationLocker treat every config item as unlocked (isLocked returns false, getValueLocked returns null). Combined with 'Disable Apply All' this bypasses server config locking entirely.",
+    "bdt.feature.cs.configuration-locker.disable-apply-all.name": "Disable ConfigurationLocker Apply All",
+    "bdt.feature.cs.configuration-locker.disable-apply-all.desc": "Disables ConfigurationLocker.applyAll so locked values are no longer force-written to the active config. Only blocks replay; does not clear the 'modification forbidden' flag.",
+
+    "bdt.action.cs.configuration-locker.set-authorized.name": "Simulate Config Authorization",
+    "bdt.action.cs.configuration-locker.set-authorized.desc": "Calls ConfigurationLocker.setAuthorized to unlock the given paths, simulating server authorization. Accepts multiple paths at once.",
+    "bdt.action.cs.configuration-locker.set-locked.name": "Simulate Config Lock",
+    "bdt.action.cs.configuration-locker.set-locked.desc": "Calls ConfigurationLocker.setLocked to lock and immediately replay path=value. Omitting the value means lock without a forced value.",
+    "bdt.action.cs.configuration-locker.enter-server.name": "Simulate Enter Server",
+    "bdt.action.cs.configuration-locker.enter-server.desc": "Calls ConfigurationLocker.enterServerLock to lock the default protected config (awaiting authorization). No arguments.",
+    "bdt.action.cs.configuration-locker.leave-server.name": "Simulate Leave Server",
+    "bdt.action.cs.configuration-locker.leave-server.desc": "Calls ConfigurationLocker.leaveServerLock to clear all lock entries and restore free config. No arguments."
+}

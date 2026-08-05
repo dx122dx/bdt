@@ -1,9 +1,9 @@
 {
 	"schemaVersion": 1,
-	"id": "chunkscanner-debugger",
+	"id": "bdt",
 	"version": "${version}",
-	"name": "ChunkScanner Debugger",
-	"description": "Provides some debugging features for ChunkScanner mod",
+	"name": "Billy's Debug Tools",
+	"description": "A general-purpose client-side debugging toolkit. Provides a unified framework of debug actions and toggleable debug features, with built-in component packs that activate only when their target mod is present.",
 	"authors": [
 		"billy65536"
 	],
@@ -11,14 +11,14 @@
 		
 	},
 	"license": "AGPL-3.0-only",
-	"icon": "assets/chunkscanner-debugger/icon.png",
+	"icon": "assets/bdt/icon.png",
 	"environment": "client",
 	"entrypoints": {
 		"client": [
-			"com.billy65536.chunkscanner.debugger.CsDebuggerMod"
+			"com.billy65536.debugger.BdtMod"
 		],
 		"modmenu": [
-			"com.billy65536.chunkscanner.debugger.integration.ModMenuIntegration"
+			"com.billy65536.debugger.integration.ModMenuIntegration"
 		]
 	},
 	"depends": {
@@ -26,13 +26,14 @@
 		"minecraft": "~1.20.1",
 		"java": ">=17",
 		"fabric-api": "*",
-		"cloth-config": "*",
-		"chunkscanner": ">=1.1.0-dev-20260805.1"
+		"cloth-config": "*"
 	},
 	"suggests": {
-		"modmenu": "*"
+		"modmenu": "*",
+		"chunkscanner": ">=1.1.0-dev-20260805.1"
 	},
 	"mixins": [
-		"chunkscanner-debugger.mixins.json"
+		"bdt.mixins.json",
+		"bdt-chunkscanner.mixins.json"
 	]
 }

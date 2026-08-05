@@ -1,0 +1,13 @@
+{
+    "required": false,
+    "minVersion": "0.8",
+    "package": "com.billy65536.debugger.builtin.chunkscanner.mixin",
+    "plugin": "com.billy65536.debugger.mixin.BdtMixinPlugin",
+    "compatibilityLevel": "JAVA_17",
+    "client": [
+        "ConfigurationLockerMixin"
+    ],
+    "injectors": {
+        "defaultRequire": 0
+    }
+}
