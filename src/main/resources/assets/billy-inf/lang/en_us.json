@@ -21,7 +21,19 @@
 
     "billy-inf.msg.info_header": "Billy's Mod infrastructure",
     "billy-inf.msg.info_version": "Version: %s",
-    "billy-inf.msg.info_modules": "Submodules:",
+    "billy-inf.msg.info_desc": "Universal client infrastructure — module framework for extending /inf with modules.",
+    "billy-inf.msg.info_modules": "Modules:",
+    "billy-inf.msg.info_name": "Name: ",
+    "billy-inf.msg.info_contrib_commands": "Commands contributed:",
+    "billy-inf.msg.info_contrib_configs": "Config paths:",
+
+    "billy-inf.msg.module_not_found": "Module not found: %s",
+    "billy-inf.msg.module_config_none": "Module %s has no registered config.",
+
+    "billy-inf.msg.config_path_unknown": "Unknown config path: %s",
+    "billy-inf.msg.config_set": "Set %s: %s → %s",
+    "billy-inf.msg.config_reset": "Reset %s: %s → %s",
+    "billy-inf.msg.config_error": "Config %s error: %s",
 
     "billy-inf.gui.title": "Billy's Mod infrastructure",
     "billy-inf.gui.category.general": "General",
