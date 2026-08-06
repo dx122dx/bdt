@@ -174,7 +174,7 @@ public final class DebuggerCommands {
         Identifier id = normalizeActionId(rawId);
         IDebugAction action = ActionRegistry.get(id);
         if (action == null) {
-            sendMsg(client, Text.translatable("billy-inf.msg.action_not_found", id.toString())
+            sendMsg(client, Text.translatable("infrastructure.msg.action_not_found", id.toString())
                     .formatted(Formatting.RED));
             return 0;
         }
@@ -189,13 +189,13 @@ public final class DebuggerCommands {
         // 目标模组版本不匹配时抛的是 NoClassDefFoundError / NoSuchMethodError 等 LinkageError
         try {
             action.execute(client, args);
-            sendMsg(client, Text.translatable("billy-inf.msg.action_success", id.toString())
+            sendMsg(client, Text.translatable("infrastructure.msg.action_success", id.toString())
                     .formatted(Formatting.GREEN));
             return 1;
         } catch (Throwable t) {
             InfrastructureMod.LOGGER.error("Debug action {} failed", id, t);
             String reason = (t.getMessage() != null) ? t.getMessage() : t.getClass().getSimpleName();
-            sendMsg(client, Text.translatable("billy-inf.msg.action_failed", id.toString(), reason)
+            sendMsg(client, Text.translatable("infrastructure.msg.action_failed", id.toString(), reason)
                     .formatted(Formatting.RED));
             if (DebuggerConfigLoader.get().showActionStackTrace) {
                 sendStackTrace(client, t);
@@ -209,19 +209,19 @@ public final class DebuggerCommands {
         Identifier id = normalizeActionId(rawId);
         IDebugAction action = ActionRegistry.get(id);
         if (action == null) {
-            sendMsg(client, Text.translatable("billy-inf.msg.action_not_found", id.toString())
+            sendMsg(client, Text.translatable("infrastructure.msg.action_not_found", id.toString())
                     .formatted(Formatting.RED));
             return 0;
         }
-        sendMsg(client, Text.translatable("billy-inf.msg.action_info_id",
+        sendMsg(client, Text.translatable("infrastructure.msg.action_info_id",
                         Text.literal(id.toString()).formatted(Formatting.GOLD))
                 .formatted(Formatting.GRAY));
         sendMsg(client, Text.literal("  ")
-                .append(Text.translatable("billy-inf.msg.action_info_name")
+                .append(Text.translatable("infrastructure.msg.action_info_name")
                         .formatted(Formatting.DARK_GRAY))
                 .append(action.getName().copy().formatted(Formatting.AQUA)));
         sendMsg(client, Text.literal("  ")
-                .append(Text.translatable("billy-inf.msg.action_info_desc")
+                .append(Text.translatable("infrastructure.msg.action_info_desc")
                         .formatted(Formatting.DARK_GRAY))
                 .append(action.getDescription().copy().formatted(Formatting.GRAY)));
         return 1;
@@ -232,12 +232,12 @@ public final class DebuggerCommands {
         Identifier id = normalizeFeatureId(rawId);
         IDebugFeature feature = FeatureRegistry.get(id);
         if (feature == null) {
-            sendMsg(client, Text.translatable("billy-inf.msg.feature_not_found", id.toString())
+            sendMsg(client, Text.translatable("infrastructure.msg.feature_not_found", id.toString())
                     .formatted(Formatting.RED));
             return 0;
         }
         boolean active = FeatureRegistry.isEnabled(id);
-        sendMsg(client, Text.translatable("billy-inf.msg.feature_status",
+        sendMsg(client, Text.translatable("infrastructure.msg.feature_status",
                         Text.literal(id.toString()).formatted(Formatting.GOLD),
                         statusText(active))
                 .formatted(Formatting.GRAY));
@@ -252,21 +252,21 @@ public final class DebuggerCommands {
     private static int setFeature(MinecraftClient client, Identifier rawId, boolean value) {
         Identifier id = normalizeFeatureId(rawId);
         if (FeatureRegistry.get(id) == null) {
-            sendMsg(client, Text.translatable("billy-inf.msg.feature_not_found", id.toString())
+            sendMsg(client, Text.translatable("infrastructure.msg.feature_not_found", id.toString())
                     .formatted(Formatting.RED));
             return 0;
         }
         boolean changed = FeatureRegistry.setEnabled(id, value);
         if (!changed) {
-            sendMsg(client, Text.translatable("billy-inf.msg.feature_unchanged",
+            sendMsg(client, Text.translatable("infrastructure.msg.feature_unchanged",
                             Text.literal(id.toString()).formatted(Formatting.GOLD),
                             statusText(value))
                     .formatted(Formatting.YELLOW));
             return 1;
         }
         String key = value
-                ? "billy-inf.msg.feature_enabled"
-                : "billy-inf.msg.feature_disabled";
+                ? "infrastructure.msg.feature_enabled"
+                : "infrastructure.msg.feature_disabled";
         sendMsg(client, Text.translatable(key, Text.literal(id.toString()).formatted(Formatting.GOLD))
                 .formatted(value ? Formatting.GREEN : Formatting.GRAY));
         return 1;
@@ -275,11 +275,11 @@ public final class DebuggerCommands {
     /** 分节列出全部已注册的动作与特性。 */
     private static int listAll(MinecraftClient client) {
         // Action 分节
-        sendMsg(client, Text.translatable("billy-inf.msg.list_actions_title",
+        sendMsg(client, Text.translatable("infrastructure.msg.list_actions_title",
                 ActionRegistry.size()).formatted(Formatting.GOLD, Formatting.BOLD));
         if (ActionRegistry.size() == 0) {
             sendMsg(client, Text.literal("  ")
-                    .append(Text.translatable("billy-inf.msg.list_empty")
+                    .append(Text.translatable("infrastructure.msg.list_empty")
                             .formatted(Formatting.DARK_GRAY)));
         } else {
             for (IDebugAction a : ActionRegistry.getAll()) {
@@ -291,11 +291,11 @@ public final class DebuggerCommands {
         }
 
         // Feature 分节
-        sendMsg(client, Text.translatable("billy-inf.msg.list_features_title",
+        sendMsg(client, Text.translatable("infrastructure.msg.list_features_title",
                 FeatureRegistry.size()).formatted(Formatting.GOLD, Formatting.BOLD));
         if (FeatureRegistry.size() == 0) {
             sendMsg(client, Text.literal("  ")
-                    .append(Text.translatable("billy-inf.msg.list_empty")
+                    .append(Text.translatable("infrastructure.msg.list_empty")
                             .formatted(Formatting.DARK_GRAY)));
         } else {
             for (IDebugFeature f : FeatureRegistry.getAll()) {
@@ -327,8 +327,8 @@ public final class DebuggerCommands {
     /** 启用状态的彩色文本表示。 */
     private static Text statusText(boolean active) {
         return active
-                ? Text.translatable("billy-inf.msg.state_enabled").formatted(Formatting.GREEN)
-                : Text.translatable("billy-inf.msg.state_disabled").formatted(Formatting.GRAY);
+                ? Text.translatable("infrastructure.msg.state_enabled").formatted(Formatting.GREEN)
+                : Text.translatable("infrastructure.msg.state_disabled").formatted(Formatting.GRAY);
     }
 
     /** 发送异常堆栈摘要（最多 5 帧），供排查动作内部错误。 */
@@ -366,7 +366,7 @@ public final class DebuggerCommands {
      * <p>调试动作 / 特性由各上层 mod 以<b>自身</b>命名空间注册（如
      * {@code csdbg:cs.configuration-locker.disable-apply-all}），因此
      * <b>显式带命名空间的输入必须原样保留</b>——早期版本一律改写成
-     * {@code billy-inf} 命名空间，导致所有非本模组注册项永远查不到。</p>
+     * {@code infrastructure} 命名空间，导致所有非本模组注册项永远查不到。</p>
      *
      * <p>仅当输入是裸名时才需要推断命名空间：{@link IdentifierArgumentType} 会把裸名
      * （如 {@code cs.foo}）补成 {@code minecraft} 命名空间。此时在注册表中按 path 回查，

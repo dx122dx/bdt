@@ -10,7 +10,7 @@ import me.shedaniel.autoconfig.serializer.GsonConfigSerializer;
  * 调试模组固定配置的加载器：AutoConfig 的薄封装。
  *
  * <p>持久化完全由 AutoConfig 的 {@code GsonConfigSerializer} 接管，
- * 写入 {@code config/billy-inf.json}。</p>
+ * 写入 {@code config/infrastructure.json}。</p>
  *
  * <p>{@link #register()} 必须在任何 {@link #get()} 调用之前执行（即
  * {@code onInitializeClient} 的最开头）。</p>

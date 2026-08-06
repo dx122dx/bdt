@@ -15,7 +15,7 @@ import com.billy65536.infrastructure.core.security.server.ConfigLocker;
  *
  * <p>把「用户可见的完整路径 → 模块 → 描述符 → 字段路径」的解析与读写集中在此，
  * 供命令层（{@code /inf config}）与配置锁定层（{@code ConfigLocker}）共用，
- * 使模块配置访问成为 billy-inf 的通用能力。</p>
+ * 使模块配置访问成为 infrastructure 的通用能力。</p>
  *
  * <p>路径解析规则见 {@link ConfigPath}：完整形态 {@code <module>:<id>/<dot.path>}，
  * 省略形态 {@code <module>:<dot.path>}（段名为默认值 {@code config} 时可省）。

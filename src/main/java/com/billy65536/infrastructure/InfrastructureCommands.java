@@ -27,7 +27,7 @@ import net.minecraft.util.Formatting;
 /**
  * {@code /inf} 根命令的注册与构建。
  *
- * <p>根命令为 {@code /inf}（亦可作为 {@code /billy-inf:inf} 调用，两者等价）。
+ * <p>根命令为 {@code /inf}（亦可作为 {@code /infrastructure} 调用，两者等价）。
  * 提供以下子命令：</p>
  * <ul>
  *   <li>{@code config} —— 模块配置统一访问（{@code get|set|reset|reload|gui <module:path>}）</li>
@@ -130,7 +130,7 @@ public final class InfrastructureCommands {
             send(client, out);
             return 1;
         } catch (ConfigManager.ConfigAccessException e) {
-            send(client, Text.translatable("billy-inf.msg.config_error", fullPath, e.getMessage())
+            send(client, Text.translatable("infrastructure.msg.config_error", fullPath, e.getMessage())
                     .formatted(Formatting.RED));
             return 0;
         }
@@ -140,7 +140,7 @@ public final class InfrastructureCommands {
         // 用 core.cli.ArgParser 把整串解析为若干 key[=value] 条目，支持批量设置
         List<ArgParser.Assignment> items = ArgParser.parseAssignments(assignments);
         if (items.isEmpty()) {
-            send(client, Text.translatable("billy-inf.msg.config_set_usage").formatted(Formatting.RED));
+            send(client, Text.translatable("infrastructure.msg.config_set_usage").formatted(Formatting.RED));
             return 0;
         }
         int applied = 0;
@@ -149,12 +149,12 @@ public final class InfrastructureCommands {
                 Object old = ConfigManager.getValue(a.key);
                 ConfigManager.setValue(a.key, a.value);
                 applied++;
-                send(client, Text.translatable("billy-inf.msg.config_set",
+                send(client, Text.translatable("infrastructure.msg.config_set",
                                 Text.literal(a.key).formatted(Formatting.GOLD),
                                 Text.literal(String.valueOf(old)).formatted(Formatting.GRAY),
                                 Text.literal(a.value).formatted(Formatting.GREEN)));
             } catch (ConfigManager.ConfigAccessException e) {
-                send(client, Text.translatable("billy-inf.msg.config_error",
+                send(client, Text.translatable("infrastructure.msg.config_error",
                                 a.key, e.getMessage()).formatted(Formatting.RED));
             }
         }
@@ -169,14 +169,14 @@ public final class InfrastructureCommands {
             Object old = ConfigManager.getValue(fullPath);
             ConfigManager.resetValue(fullPath);
             saveModuleOfPath(client, fullPath);
-            send(client, Text.translatable("billy-inf.msg.config_reset",
+            send(client, Text.translatable("infrastructure.msg.config_reset",
                             Text.literal(fullPath).formatted(Formatting.GOLD),
                             Text.literal(String.valueOf(old)).formatted(Formatting.GRAY),
                             Text.literal(String.valueOf(ConfigManager.getValue(fullPath)))
                                     .formatted(Formatting.GREEN)));
             return 1;
         } catch (ConfigManager.ConfigAccessException e) {
-            send(client, Text.translatable("billy-inf.msg.config_error",
+            send(client, Text.translatable("infrastructure.msg.config_error",
                             fullPath, e.getMessage()).formatted(Formatting.RED));
             return 0;
         }
@@ -195,20 +195,20 @@ public final class InfrastructureCommands {
                 m.saveConfig();
             }
             ConfigLocker.applyAll(allDescriptors());
-            send(client, Text.translatable("billy-inf.msg.config_reloaded_all")
+            send(client, Text.translatable("infrastructure.msg.config_reloaded_all")
                     .formatted(Formatting.GREEN));
             return 1;
         }
         ConfigDescriptor descriptor = ConfigManager.findDescriptorByTarget(target);
         if (descriptor == null) {
-            send(client, Text.translatable("billy-inf.msg.config_target_not_found", target)
+            send(client, Text.translatable("infrastructure.msg.config_target_not_found", target)
                     .formatted(Formatting.RED));
             return 0;
         }
         IModule module = ModuleRegistry.get(descriptor.path().module());
         if (module != null) module.saveConfig();
         ConfigLocker.applyAll(List.of(descriptor));
-        send(client, Text.translatable("billy-inf.msg.config_reloaded",
+        send(client, Text.translatable("infrastructure.msg.config_reloaded",
                         descriptor.path().targetString()).formatted(Formatting.GREEN));
         return 1;
     }
@@ -223,24 +223,24 @@ public final class InfrastructureCommands {
         if (target == null || target.isEmpty()) {
             descriptor = firstDescriptorWithGui();
             if (descriptor == null) {
-                send(client, Text.translatable("billy-inf.msg.config_no_gui", "*")
+                send(client, Text.translatable("infrastructure.msg.config_no_gui", "*")
                         .formatted(Formatting.RED));
                 return 0;
             }
         } else {
             descriptor = ConfigManager.findDescriptorByTarget(target);
             if (descriptor == null) {
-                send(client, Text.translatable("billy-inf.msg.config_target_not_found", target)
+                send(client, Text.translatable("infrastructure.msg.config_target_not_found", target)
                         .formatted(Formatting.RED));
                 return 0;
             }
         }
         if (descriptor.openGuiOnClient()) {
-            send(client, Text.translatable("billy-inf.msg.config_gui_opened",
+            send(client, Text.translatable("infrastructure.msg.config_gui_opened",
                             descriptor.path().targetString()).formatted(Formatting.GREEN));
             return 1;
         }
-        send(client, Text.translatable("billy-inf.msg.config_no_gui",
+        send(client, Text.translatable("infrastructure.msg.config_no_gui",
                         descriptor.path().targetString()).formatted(Formatting.RED));
         return 0;
     }
@@ -369,17 +369,17 @@ public final class InfrastructureCommands {
                 .map(c -> c.getMetadata().getVersion().getFriendlyString())
                 .orElse("?");
         MutableText out = Text.literal("");
-        out = out.append(Text.translatable("billy-inf.msg.info_header")
+        out = out.append(Text.translatable("infrastructure.msg.info_header")
                 .formatted(Formatting.GOLD, Formatting.BOLD)).append("\n");
-        out = out.append(Text.translatable("billy-inf.msg.info_version", version)
+        out = out.append(Text.translatable("infrastructure.msg.info_version", version)
                 .formatted(Formatting.GRAY)).append("\n");
-        out = out.append(Text.translatable("billy-inf.msg.info_desc")
+        out = out.append(Text.translatable("infrastructure.msg.info_desc")
                 .formatted(Formatting.GRAY)).append("\n");
-        out = out.append(Text.translatable("billy-inf.msg.info_modules")
+        out = out.append(Text.translatable("infrastructure.msg.info_modules")
                 .formatted(Formatting.YELLOW)).append("\n");
         if (ModuleRegistry.size() == 0) {
             out = out.append(Text.literal("  ")
-                    .append(Text.translatable("billy-inf.msg.list_empty")
+                    .append(Text.translatable("infrastructure.msg.list_empty")
                             .formatted(Formatting.DARK_GRAY))).append("\n");
         } else {
             for (IModule m : ModuleRegistry.getAll()) {
@@ -399,7 +399,7 @@ public final class InfrastructureCommands {
         IModule module = (rawModuleId == null || rawModuleId.isEmpty())
                 ? null : ModuleRegistry.get(rawModuleId);
         if (module == null) {
-            send(client, Text.translatable("billy-inf.msg.module_not_found",
+            send(client, Text.translatable("infrastructure.msg.module_not_found",
                             rawModuleId == null ? "?" : rawModuleId)
                     .formatted(Formatting.RED));
             return 0;
@@ -410,23 +410,23 @@ public final class InfrastructureCommands {
         // 标签键必须与「整句」键区分：info_version 带 %s 占位符、info_desc 是完整句子，
         // 直接当标签用会渲染出 "版本：%s1.0.0" 与整句拼接的错乱文本
         out = out.append(Text.literal("  ")
-                .append(Text.translatable("billy-inf.msg.info_version_label").formatted(Formatting.DARK_GRAY))
+                .append(Text.translatable("infrastructure.msg.info_version_label").formatted(Formatting.DARK_GRAY))
                 .append(Text.literal(module.getVersion()).formatted(Formatting.GRAY))).append("\n");
         out = out.append(Text.literal("  ")
-                .append(Text.translatable("billy-inf.msg.info_name").formatted(Formatting.DARK_GRAY))
+                .append(Text.translatable("infrastructure.msg.info_name").formatted(Formatting.DARK_GRAY))
                 .append(module.getName().copy().formatted(Formatting.AQUA))).append("\n");
         out = out.append(Text.literal("  ")
-                .append(Text.translatable("billy-inf.msg.info_desc_label").formatted(Formatting.DARK_GRAY))
+                .append(Text.translatable("infrastructure.msg.info_desc_label").formatted(Formatting.DARK_GRAY))
                 .append(module.getDescription().copy().formatted(Formatting.GRAY))).append("\n");
 
         // 贡献：命令
         out = out.append(Text.literal("  ")
-                .append(Text.translatable("billy-inf.msg.info_contrib_commands").formatted(Formatting.YELLOW)))
+                .append(Text.translatable("infrastructure.msg.info_contrib_commands").formatted(Formatting.YELLOW)))
                 .append("\n");
         var literals = module.getCommandLiterals();
         if (literals == null || literals.isEmpty()) {
             out = out.append(Text.literal("    ")
-                    .append(Text.translatable("billy-inf.msg.list_empty").formatted(Formatting.DARK_GRAY)))
+                    .append(Text.translatable("infrastructure.msg.list_empty").formatted(Formatting.DARK_GRAY)))
                     .append("\n");
         } else {
             for (String lit : literals) {
@@ -437,14 +437,14 @@ public final class InfrastructureCommands {
 
         // 贡献：配置路径
         out = out.append(Text.literal("  ")
-                .append(Text.translatable("billy-inf.msg.info_contrib_configs").formatted(Formatting.YELLOW)))
+                .append(Text.translatable("infrastructure.msg.info_contrib_configs").formatted(Formatting.YELLOW)))
                 .append("\n");
         // 每个配置段一行：- <module>:<config_id> (N 项)。
         // 逐条列出全部字段路径会在字段多时刷屏；字段级路径改由 /inf config 的补全给出。
         List<ConfigDescriptor> descriptors = module.getConfigDescriptors();
         if (descriptors.isEmpty()) {
             out = out.append(Text.literal("    ")
-                    .append(Text.translatable("billy-inf.msg.list_empty").formatted(Formatting.DARK_GRAY)))
+                    .append(Text.translatable("infrastructure.msg.list_empty").formatted(Formatting.DARK_GRAY)))
                     .append("\n");
         } else {
             for (ConfigDescriptor d : descriptors) {
@@ -452,7 +452,7 @@ public final class InfrastructureCommands {
                 out = out.append(Text.literal("    - ")
                                 .append(Text.literal(d.path().targetString()).formatted(Formatting.AQUA))
                                 .append(Text.literal(" "))
-                                .append(Text.translatable("billy-inf.msg.info_config_count", count)
+                                .append(Text.translatable("infrastructure.msg.info_config_count", count)
                                         .formatted(Formatting.DARK_GRAY)))
                         .append("\n");
             }

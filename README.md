@@ -1,10 +1,10 @@
 # Billy's Mod infrastructure
 
-一个通用的 Minecraft 1.20.1 **Fabric 客户端**基础设施模组（mod id：`billy-inf`）。
+一个通用的 Minecraft 1.20.1 **Fabric 客户端**基础设施模组（mod id：`infrastructure`）。
 
 它本身不绑定任何具体的「目标模组」，而是通过一套**模块框架（module framework）**提供统一的命令、配置与扩展能力。当前内置的子模块是 **debugger（调试器）**——一个可扩展的调试动作（Action）与调试特性（Feature）框架，供你和其它模组以「内置组件包」形式挂载调试工具。
 
-> 设计哲学：基础设施与业务解耦。针对某个具体模组的调试项由**外部模组**经 `billy-inf:debugger` 扩展点注入，目标模组缺失时自动跳过，绝不拖慢甚至阻断游戏启动。
+> 设计哲学：基础设施与业务解耦。针对某个具体模组的调试项由**外部模组**经 `infrastructure:debugger` 扩展点注入，目标模组缺失时自动跳过，绝不拖慢甚至阻断游戏启动。
 
 - 包名：`com.billy65536.infrastructure`
 - 主类：`InfrastructureMod`
@@ -39,8 +39,8 @@
   - **调试特性 Feature** —— 可开关、状态持久化的能力（如解锁某限制、禁用某应用逻辑），重启后保持。
   - 全部以 `Identifier` 为唯一标识，支持 `run / info / about / enable / disable / list`。
 - **双轨配置**：
-  - 固定配置（详细日志、失败堆栈）走 AutoConfig，存于 `config/billy-inf.json`。
-  - 动态特性开关走独立 Gson 存储，存于 `config/billy-inf-features.json`（不与 AutoConfig 合并，避免动态字段被清掉）。
+  - 固定配置（详细日志、失败堆栈）走 AutoConfig，存于 `config/infrastructure.json`。
+  - 动态特性开关走独立 Gson 存储，存于 `config/infrastructure-features.json`（不与 AutoConfig 合并，避免动态字段被清掉）。
 - **健壮性优先**：任何模块/内置包/动作在加载或执行时的异常都被捕获，**绝不**阻断游戏启动或冒泡到命令系统。
 - **可选集成 ModMenu**：提供「设置」入口，缺失时不影响任何功能。
 
@@ -48,7 +48,7 @@
 
 ## 安装
 
-1. 从发布页下载 `billy-inf-<version>.jar`。
+1. 从发布页下载 `infrastructure-<version>.jar`。
 2. 放入 `.minecraft/mods/`。
 3. 确保已安装 **Fabric Loader ≥ 0.19.3**、**Fabric API**、**Cloth Config**（运行时必需），**ModMenu** 为可选。
 4. 启动游戏，输入 `/inf info` 验证。
@@ -59,7 +59,7 @@
 
 ## 命令总览
 
-根命令为 `/inf`（亦可写作 `/billy-inf:inf`）。
+根命令为 `/inf`（亦可写作 `/infrastructure`）。
 
 | 命令 | 说明 |
 | --- | --- |
@@ -89,25 +89,25 @@
 /inf dbg list
 
 # 执行某个调试动作并带参数
-/inf dbg action run billy-inf:unlock_all
+/inf dbg action run infrastructure:unlock_all
 
 # 查看某个特性状态并启用
-/inf dbg feat about billy-inf:disable_apply_all
-/inf dbg feat enable billy-inf:disable_apply_all
+/inf dbg feat about infrastructure:disable_apply_all
+/inf dbg feat enable infrastructure:disable_apply_all
 ```
 
 ---
 
 ## 模块框架
 
-`billy-inf` 的核心是一套轻量模块框架，位于 `core` 包：
+`infrastructure` 的核心是一套轻量模块框架，位于 `core` 包：
 
 - **`IModule`**：模块扩展点。实现 `getId()` / `getVersion()` / `getName()` / `getDescription()`（强制），以及可选的 `onInitializeModule()` / `getConfig()` / `saveConfig()` / `buildCommands()` / `getCommandLiterals()`。「一次声明全部能力」，注册表与命令登记器统一接管。
 - **`ModuleRegistry`**：静态单例注册表。两种登记途径：
   - 显式：`ModuleRegistry.register(module)`；
   - 自动：`ModuleRegistry.discover()` 基于 Java SPI 扫描 `META-INF/services/com.billy65536.infrastructure.core.module.IModule`，发现全部实现（当前仅 `DebuggerModule`）。
   - 任一模块初始化失败仅记录并跳过，不阻断其它模块。
-- **发现时机**：`discover()` 挂在 Fabric 的 `CLIENT_STARTED` 事件上，即**所有模组的客户端入口点执行完毕之后**才触发。Fabric 按依赖拓扑序调用入口点，billy-inf 必然早于依赖它的模组；若在入口点内直接发现，下游模块会先于其宿主模组自身初始化而读到未就绪状态。因此模块的 `onInitializeModule()` 可以安全依赖宿主模组的初始化结果，但不应在其中做需要更早时机的注册（资源包监听器、注册表条目等）。
+- **发现时机**：`discover()` 挂在 Fabric 的 `CLIENT_STARTED` 事件上，即**所有模组的客户端入口点执行完毕之后**才触发。Fabric 按依赖拓扑序调用入口点，infrastructure 必然早于依赖它的模组；若在入口点内直接发现，下游模块会先于其宿主模组自身初始化而读到未就绪状态。因此模块的 `onInitializeModule()` 可以安全依赖宿主模组的初始化结果，但不应在其中做需要更早时机的注册（资源包监听器、注册表条目等）。
 - **`ModuleCommandRegistrar`**：在模块登记时统一挂载其命令子树到 `/inf` 根，根命令构建时只消费登记结果，不自行遍历模块。
 
 新增一个模块只需：实现 `IModule` + 在 services 文件追加一行，**无需改动任何启动代码**。
@@ -129,15 +129,15 @@
 - 可开关、状态持久化的能力。注册到 `FeatureRegistry` 后由 `/inf dbg feat about|enable|disable <id>` 操作。
 - `isDefaultEnabled()` 决定无记录时的初始状态（默认 **false**，调试特性默认关闭）。
 - `onEnable()` / `onDisable()` 回调须幂等，用于挂载/卸载事件监听或渲染钩子。
-- 启用状态由 `FeatureStateStore` 持久化到 `config/billy-inf-features.json`，重启保持。
+- 启用状态由 `FeatureStateStore` 持久化到 `config/infrastructure-features.json`，重启保持。
 
 ### 内置调试包（builtin packs）
 
 **本模组自身不内置任何具体目标模组的调试项**（`BuiltinsManager.PACKS` 当前为空）。调试包由**外部模组**通过扩展点注入：
 
-- 外部 mod 实现 `DebuggerBuiltinProvider`，并在其 `fabric.mod.json` 注册自定义 entrypoint `"billy-inf:debugger"`；
+- 外部 mod 实现 `DebuggerBuiltinProvider`，并在其 `fabric.mod.json` 注册自定义 entrypoint `"infrastructure:debugger"`；
 - 在 `contribute(contributor)` 中调用 `contributor.add(requiredModId, displayName, XxxBuiltins::register)`；
-- `billy-inf` 仅在 `requiredModId` 已加载时才执行 `register`，否则整包跳过。
+- `infrastructure` 仅在 `requiredModId` 已加载时才执行 `register`，否则整包跳过。
 
 内置包采用**延迟类加载隔离**：本框架只引用各包的「独立入口类」方法引用，绝不在常量池中持有目标模组类型，从而让「目标缺失即跳过」真正生效。例子：Chunk Scanner 的调试包位于独立模组 [`cs-dbg`](https://github.com/dx122dx/cs-dbg)。
 
@@ -149,8 +149,8 @@
 
 | 分类 | 内容 | 落盘文件 |
 | --- | --- | --- |
-| 通用设置 | 详细日志（verboseLogging）、失败时显示堆栈（showActionStackTrace） | `config/billy-inf.json`（AutoConfig） |
-| 调试特性 | 各特性的开关（由运行时注册决定） | `config/billy-inf-features.json`（Gson） |
+| 通用设置 | 详细日志（verboseLogging）、失败时显示堆栈（showActionStackTrace） | `config/infrastructure.json`（AutoConfig） |
+| 调试特性 | 各特性的开关（由运行时注册决定） | `config/infrastructure-features.json`（Gson） |
 
 > 注意：两条配置**不可合并**写入同一文件——AutoConfig 以静态类结构反序列化，未知字段会被静默丢弃；动态特性开关因此独立持久化，且其存储会保留「已持久化但当前未注册」的条目，避免注册顺序变化导致用户开关被静默重置。
 
@@ -165,7 +165,7 @@
 
 ## 扩展：为你的模组注入调试包
 
-你的模组只需 `modImplementation billy-inf`（运行时必需），并实现扩展点：
+你的模组只需 `modImplementation infrastructure`（运行时必需），并实现扩展点：
 
 ```java
 public final class MyBuiltins implements DebuggerBuiltinProvider {
@@ -191,7 +191,7 @@ public final class MyBuiltins implements DebuggerBuiltinProvider {
 ```json
 {
   "entrypoints": {
-    "billy-inf:debugger": ["com.example.mymod.MyBuiltins"]
+    "infrastructure:debugger": ["com.example.mymod.MyBuiltins"]
   }
 }
 ```
@@ -199,7 +199,7 @@ public final class MyBuiltins implements DebuggerBuiltinProvider {
 约束：
 
 - `register` 必须是**独立入口类**的方法引用，不要写成持有目标模组类型的 lambda 闭包，否则会破坏惰性加载。
-- 动作/特性 id 使用你自己的命名空间（如 `your-mod-id:foo`），不要占用 `billy-inf`。
+- 动作/特性 id 使用你自己的命名空间（如 `your-mod-id:foo`），不要占用 `infrastructure`。
 
 ---
 
@@ -209,7 +209,7 @@ public final class MyBuiltins implements DebuggerBuiltinProvider {
 sh ./gradlew build
 ```
 
-产物位于 `build/libs/billy-inf-<version>.jar`。
+产物位于 `build/libs/infrastructure-<version>.jar`。
 
 - 版本号采用**语义化版本（SemVer）**，如 `0.1.0` / `1.0.0` / `1.0.0-beta.1`。发布以 **git tag** 为唯一真相源：推送形如 `v1.0.0` 的 tag 时，CI 自动把 tag（去掉 `v` 前缀）注入 `gradle.properties` 的 `mod_version` 后再构建发布，无需手动改版本号。
 - 编译级别 Java 17（`--release 17`）。
@@ -234,4 +234,4 @@ sh ./gradlew build
 
 ## 授权
 
-本项目以 **AGPL-3.0-only** 许可发布。源代码见 <https://github.com/dx122dx/billy-inf>。
+本项目以 **AGPL-3.0-only** 许可发布。源代码见 <https://github.com/dx122dx/mod-infrastructure>。

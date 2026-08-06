@@ -75,7 +75,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
           # 元数据（version 带 v 前缀，与 git tag 一致；mod 内部版本不含 v）
-          name: billy-inf ${{ steps.meta.outputs.version }}
+          name: infrastructure ${{ steps.meta.outputs.version }}
           version: ${{ steps.meta.outputs.tag }}
           version-type: ${{ steps.meta.outputs.version_type }}
 

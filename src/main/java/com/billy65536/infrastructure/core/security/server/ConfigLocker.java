@@ -15,10 +15,10 @@ import com.billy65536.infrastructure.core.config.ConfigPath;
 import com.billy65536.infrastructure.core.module.ModuleConfigReflectionAccessor;
 
 /**
- * 纯客户端「服务端 opt-in」配置锁定状态机（billy-inf 核心安全层）。
+ * 纯客户端「服务端 opt-in」配置锁定状态机（infrastructure 核心安全层）。
  *
  * <p>原位于 chunkscanner 的 {@code security.server_optin.ConfigurationLocker}，现上移为
- * billy-inf 的<b>通用</b>配置锁定能力，供任意注册为模块的 mod 复用。逻辑基本继承原实现：
+ * infrastructure 的<b>通用</b>配置锁定能力，供任意注册为模块的 mod 复用。逻辑基本继承原实现：
  * 锁定登记、强制值重放、以及针对命令 / GUI / 手动编辑磁盘文件三条修改通道的防绕过
  * （经配置对象的 {@code validatePostLoad()} → {@link #applyAll}）均已闭环。</p>
  *
@@ -40,7 +40,7 @@ import com.billy65536.infrastructure.core.module.ModuleConfigReflectionAccessor;
  */
 public final class ConfigLocker {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger("billy-inf.security.optin");
+    private static final Logger LOGGER = LoggerFactory.getLogger("infrastructure.security.optin");
 
     /**
      * 配置锁定状态表：完整路径 → 强制值。

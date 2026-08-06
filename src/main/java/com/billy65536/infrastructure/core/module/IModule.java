@@ -9,7 +9,7 @@ import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.text.Text;
 
 /**
- * 模块扩展点接口。任何希望以「模块」身份接入 billy-inf 的组件都应实现本接口，
+ * 模块扩展点接口。任何希望以「模块」身份接入 infrastructure 的组件都应实现本接口，
  * 并通过 {@link ModuleRegistry#register(IModule)} 显式登记，或由
  * {@link ModuleRegistry#discover()} 基于 Java SPI（META-INF/services）自动发现并登记。
  *
@@ -18,7 +18,7 @@ import net.minecraft.text.Text;
  * 注册表与命令登记器在 {@code register} 时统一接管配置索引与命令挂载，
  * 调用方无需再做额外装配。</p>
  *
- * <p>模块不一定位于 billy-inf 同 mod 内（可跨 mod、可运行时才在 classpath 上）。
+ * <p>模块不一定位于 infrastructure 同 mod 内（可跨 mod、可运行时才在 classpath 上）。
  * 框架全程基于反射访问配置对象，不要求编译期可见模块的配置类。</p>
  */
 public interface IModule {

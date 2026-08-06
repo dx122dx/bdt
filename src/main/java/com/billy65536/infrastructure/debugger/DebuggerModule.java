@@ -19,7 +19,7 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
 
 /**
- * debugger 子模块对 {@link IModule} 的实现，使 debugger 以「模块」身份接入 billy-inf 核心框架。
+ * debugger 子模块对 {@link IModule} 的实现，使 debugger 以「模块」身份接入 infrastructure 核心框架。
  *
  * <p>本类通过 Java SPI 自动发现（见
  * {@code META-INF/services/com.billy65536.infrastructure.core.module.IModule}），
@@ -34,7 +34,7 @@ import net.minecraft.text.Text;
  *       不再由 {@code InfrastructureCommands} 显式挂载。</li>
  * </ul>
  *
- * <p>版本号取自模组元数据（与 billy-inf 一致），无需与 mod_version 手工同步。</p>
+ * <p>版本号取自模组元数据（与 infrastructure 一致），无需与 mod_version 手工同步。</p>
  */
 public final class DebuggerModule implements IModule {
 
@@ -58,12 +58,12 @@ public final class DebuggerModule implements IModule {
 
     @Override
     public Text getName() {
-        return Text.translatable("billy-inf.msg.module_debugger_name");
+        return Text.translatable("infrastructure.msg.module_debugger_name");
     }
 
     @Override
     public Text getDescription() {
-        return Text.translatable("billy-inf.msg.module_debugger_desc");
+        return Text.translatable("infrastructure.msg.module_debugger_desc");
     }
 
     // =================== 初始化 ===================

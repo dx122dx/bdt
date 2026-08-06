@@ -22,7 +22,7 @@ import net.minecraft.util.Identifier;
  * 调试特性启用状态的持久化存储。
  *
  * <p>以扁平的 {@code {"命名空间:路径": true/false}} 结构写入
- * {@code config/billy-inf-features.json}。</p>
+ * {@code config/infrastructure-features.json}。</p>
  *
  * <p>不并入 AutoConfig 的配置文件：特性数量由运行时注册决定，而
  * AutoConfig 的 {@code GsonConfigSerializer} 以静态类结构为准反序列化，
@@ -33,7 +33,7 @@ import net.minecraft.util.Identifier;
  */
 public final class FeatureStateStore {
 
-    private static final String FILENAME = "billy-inf-features.json";
+    private static final String FILENAME = "infrastructure-features.json";
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 

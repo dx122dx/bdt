@@ -1,22 +1,20 @@
 package com.billy65536.infrastructure.debugger.api;
 
-import net.fabricmc.loader.api.FabricLoader;
-
 /**
- * 外部 mod 向 billy-inf 调试框架注入内置调试包（builtin pack）的扩展入口。
+ * 外部 mod 向 infrastructure 调试框架注入内置调试包（builtin pack）的扩展入口。
  *
  * <p>实现本接口，并向自身 {@code fabric.mod.json} 注册自定义 entrypoint
- * {@code "billy-inf:debugger"}（值为实现类的全限定名），billy-inf 在初始化时
+ * {@code "infrastructure:debugger"}（值为实现类的全限定名），infrastructure 在初始化时
  * 会收集所有此类贡献的包并注册。</p>
  *
  * <p>内置包对应一个目标模组：仅当该模组已加载时才注册其中的调试项，
  * 从而让外部 mod 也能以「惰性、目标缺失即跳过」的方式扩展调试框架，
- * 而 billy-inf 自身不再硬编码任何具体目标模组的调试逻辑。</p>
+ * 而 infrastructure 自身不再硬编码任何具体目标模组的调试逻辑。</p>
  *
  * <p>示例（fabric.mod.json）：</p>
  * <pre>{@code
  * "entrypoints": {
- *   "billy-inf:debugger": ["com.example.mymod.MyBuiltinProvider"]
+ *   "infrastructure:debugger": ["com.example.mymod.MyBuiltinProvider"]
  * }
  * }</pre>
  */

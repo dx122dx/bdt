@@ -25,7 +25,7 @@ import net.minecraft.util.Identifier;
  * 因此改为完全手工构建，AutoConfig 仅保留持久化职责。</p>
  *
  * <p><b>双持久化隔离（硬约束）</b>：两个分类分别写入
- * {@code config/billy-inf.json} 与 {@code config/billy-inf-features.json}。
+ * {@code config/infrastructure.json} 与 {@code config/infrastructure-features.json}。
  * 动态 Feature 映射绝不可并入 AutoConfig 的文件——其
  * {@code GsonConfigSerializer} 以静态类结构为准反序列化，未知字段会被静默丢弃，
  * 导致每次保存都清空。</p>
@@ -42,7 +42,7 @@ public final class DebugToolsConfigScreen {
     public static Screen create(Screen parent) {
         ConfigBuilder builder = ConfigBuilder.create()
                 .setParentScreen(parent)
-                .setTitle(Text.translatable("billy-inf.gui.title"));
+                .setTitle(Text.translatable("infrastructure.gui.title"));
 
         ConfigEntryBuilder entryBuilder = builder.entryBuilder();
 
@@ -69,21 +69,21 @@ public final class DebugToolsConfigScreen {
      */
     private static void buildGeneralCategory(ConfigBuilder builder, ConfigEntryBuilder entryBuilder) {
         ConfigCategory category = builder.getOrCreateCategory(
-                Text.translatable("billy-inf.gui.category.general"));
+                Text.translatable("infrastructure.gui.category.general"));
 
         category.addEntry(entryBuilder
-                .startBooleanToggle(Text.translatable("billy-inf.gui.option.verbose_logging"),
+                .startBooleanToggle(Text.translatable("infrastructure.gui.option.verbose_logging"),
                         DebuggerConfigLoader.get().verboseLogging)
                 .setDefaultValue(false)
-                .setTooltip(Text.translatable("billy-inf.gui.option.verbose_logging.desc"))
+                .setTooltip(Text.translatable("infrastructure.gui.option.verbose_logging.desc"))
                 .setSaveConsumer(value -> DebuggerConfigLoader.get().verboseLogging = value)
                 .build());
 
         category.addEntry(entryBuilder
-                .startBooleanToggle(Text.translatable("billy-inf.gui.option.show_action_stack_trace"),
+                .startBooleanToggle(Text.translatable("infrastructure.gui.option.show_action_stack_trace"),
                         DebuggerConfigLoader.get().showActionStackTrace)
                 .setDefaultValue(false)
-                .setTooltip(Text.translatable("billy-inf.gui.option.show_action_stack_trace.desc"))
+                .setTooltip(Text.translatable("infrastructure.gui.option.show_action_stack_trace.desc"))
                 .setSaveConsumer(value -> DebuggerConfigLoader.get().showActionStackTrace = value)
                 .build());
     }
@@ -96,11 +96,11 @@ public final class DebugToolsConfigScreen {
      */
     private static void buildFeaturesCategory(ConfigBuilder builder, ConfigEntryBuilder entryBuilder) {
         ConfigCategory category = builder.getOrCreateCategory(
-                Text.translatable("billy-inf.gui.category.features"));
+                Text.translatable("infrastructure.gui.category.features"));
 
         if (FeatureRegistry.size() == 0) {
             category.addEntry(entryBuilder
-                    .startTextDescription(Text.translatable("billy-inf.gui.no_features"))
+                    .startTextDescription(Text.translatable("infrastructure.gui.no_features"))
                     .build());
             return;
         }

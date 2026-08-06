@@ -1,6 +1,6 @@
 {
 	"schemaVersion": 1,
-	"id": "billy-inf",
+	"id": "infrastructure",
 	"version": "${version}",
 	"name": "Billy's Mod infrastructure",
 	"description": "A general-purpose client-side infrastructure mod. Ships a debug submodule (debug actions and toggleable debug features) that activates built-in component packs only when their target mod is present.",
@@ -8,11 +8,11 @@
 		"billy65536"
 	],
 	"contact": {
-		"homepage": "https://github.com/dx122dx/billy-inf",
-        "sources": "https://github.com/dx122dx/billy-inf"
+		"homepage": "https://github.com/dx122dx/infrastructure",
+        "sources": "https://github.com/dx122dx/infrastructure"
 	},
 	"license": "AGPL-3.0-only",
-	"icon": "assets/billy-inf/icon.png",
+	"icon": "assets/infrastructure/icon.png",
 	"environment": "client",
 	"entrypoints": {
 		"client": [

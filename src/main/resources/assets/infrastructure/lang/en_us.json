@@ -1,0 +1,65 @@
+{
+    "infrastructure.msg.action_success": "Debug action completed: %s",
+    "infrastructure.msg.action_failed": "Debug action %s failed: %s",
+    "infrastructure.msg.action_not_found": "Debug action not found: %s",
+    "infrastructure.msg.action_info_id": "Debug action: %s",
+    "infrastructure.msg.action_info_name": "Name: ",
+    "infrastructure.msg.action_info_desc": "Description: ",
+
+    "infrastructure.msg.feature_status": "Debug feature %s is currently %s",
+    "infrastructure.msg.feature_enabled": "Enabled debug feature: %s",
+    "infrastructure.msg.feature_disabled": "Disabled debug feature: %s",
+    "infrastructure.msg.feature_unchanged": "Debug feature %s is already %s, no change made.",
+    "infrastructure.msg.feature_not_found": "Debug feature not found: %s",
+
+    "infrastructure.msg.state_enabled": "enabled",
+    "infrastructure.msg.state_disabled": "disabled",
+
+    "infrastructure.msg.list_actions_title": "==== Debug Actions (%s) ====",
+    "infrastructure.msg.list_features_title": "==== Debug Features (%s) ====",
+    "infrastructure.msg.list_empty": "(none registered)",
+
+    "infrastructure.msg.info_header": "Billy's Mod infrastructure",
+    "infrastructure.msg.info_version": "Version: %s",
+    "infrastructure.msg.info_desc": "Universal client infrastructure — module framework for extending /inf with modules.",
+    "infrastructure.msg.info_modules": "Modules:",
+    "infrastructure.msg.info_name": "Name: ",
+    "infrastructure.msg.info_version_label": "Version: ",
+    "infrastructure.msg.info_desc_label": "Description: ",
+    "infrastructure.msg.info_contrib_commands": "Commands contributed:",
+    "infrastructure.msg.info_contrib_configs": "Configs contributed:",
+    "infrastructure.msg.info_config_count": "(%s entries)",
+    "infrastructure.msg.module_debugger_name": "Debugger",
+    "infrastructure.msg.module_debugger_desc": "Built-in debug module: run debug actions, toggle debug features, and inspect them via the /inf dbg command tree.",
+
+    "infrastructure.msg.module_not_found": "Module not found: %s",
+    "infrastructure.msg.module_config_none": "Module %s has no registered config.",
+
+    "infrastructure.msg.config_path_unknown": "Unknown config path: %s",
+    "infrastructure.msg.config_set": "Set %s: %s → %s",
+    "infrastructure.msg.config_reset": "Reset %s: %s → %s",
+    "infrastructure.msg.config_error": "Config %s error: %s",
+    "infrastructure.msg.config_set_usage": "Usage: /inf config set <module:path=value> [module:path=value ...]",
+    "infrastructure.msg.config_set_need_value": "Config %s is missing a =value, use module:path=value form",
+    "infrastructure.msg.config_reloaded_all": "All module configs reloaded (server locks reapplied).",
+    "infrastructure.msg.config_reloaded": "Config segment '%s' reloaded (server locks reapplied).",
+    "infrastructure.msg.config_target_not_found": "Config segment not found: %s (expected 'module:config_id'; 'config' may be omitted)",
+    "infrastructure.msg.config_no_gui": "Config segment '%s' has no GUI available.",
+    "infrastructure.msg.config_gui_opened": "Opened config GUI for %s.",
+
+    "infrastructure.gui.title": "Billy's Mod infrastructure",
+    "infrastructure.gui.category.general": "General",
+    "infrastructure.gui.category.features": "Debug Features",
+    "infrastructure.gui.no_features": "No debug features are currently registered.",
+
+    "infrastructure.gui.option.verbose_logging": "Verbose Logging",
+    "infrastructure.gui.option.verbose_logging.desc": "Log detailed framework information, including registration details and action execution traces.",
+    "infrastructure.gui.option.show_action_stack_trace": "Show Stack Trace",
+    "infrastructure.gui.option.show_action_stack_trace.desc": "Append an exception stack trace summary (up to 5 frames) to chat when a debug action fails.",
+
+    "text.autoconfig.infrastructure.title": "Billy's Mod infrastructure Settings",
+    "text.autoconfig.infrastructure.option.verboseLogging": "Verbose Logging",
+    "text.autoconfig.infrastructure.option.verboseLogging.@Tooltip": "Log detailed framework information, including registration details and action execution traces.",
+    "text.autoconfig.infrastructure.option.showActionStackTrace": "Show Stack Trace",
+    "text.autoconfig.infrastructure.option.showActionStackTrace.@Tooltip": "Append an exception stack trace summary (up to 5 frames) to chat when a debug action fails."
+}

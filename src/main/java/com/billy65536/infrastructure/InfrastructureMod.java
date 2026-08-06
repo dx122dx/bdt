@@ -10,7 +10,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.minecraft.util.Identifier;
 
 /**
- * 模组入口。mod id 为 {@code billy-inf}，中文名「Billy's Mod infrastructure」。
+ * 模组入口。mod id 为 {@code infrastructure}，中文名「Billy's Mod infrastructure」。
  *
  * <p>本模组是通用客户端基础设施，按子模块组织（目前仅有 debugger 调试子模块）。
  * 模块私有的初始化步骤一律下沉到模块自身，本类不感知任何具体子模块。</p>
@@ -21,7 +21,7 @@ import net.minecraft.util.Identifier;
  * 以及把模块发现挂到 {@link ClientLifecycleEvents#CLIENT_STARTED} 上。</p>
  *
  * <p>模块发现之所以<b>不</b>在入口点内直接执行：Fabric 按依赖拓扑序调用各模组的
- * {@code client} 入口点，依赖方（billy-inf）必然早于依赖它的模组（如 chunkscanner）。
+ * {@code client} 入口点，依赖方（infrastructure）必然早于依赖它的模组（如 chunkscanner）。
  * 若此时就 SPI 实例化并初始化下游模块，模块会在其宿主模组自身
  * {@code onInitializeClient} 之前被初始化，读到未就绪的宿主状态。
  * 改挂 {@code CLIENT_STARTED} 后，发现时机严格晚于<b>所有</b>模组的客户端入口点，
@@ -32,7 +32,7 @@ import net.minecraft.util.Identifier;
  */
 public final class InfrastructureMod implements ClientModInitializer {
 
-    public static final String MOD_ID = "billy-inf";
+    public static final String MOD_ID = "infrastructure";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     public static Identifier id(String path) {

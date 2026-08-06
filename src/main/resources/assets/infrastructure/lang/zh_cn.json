@@ -1,0 +1,65 @@
+{
+    "infrastructure.msg.action_success": "调试动作执行完成：%s",
+    "infrastructure.msg.action_failed": "调试动作 %s 执行失败：%s",
+    "infrastructure.msg.action_not_found": "未找到调试动作：%s",
+    "infrastructure.msg.action_info_id": "调试动作：%s",
+    "infrastructure.msg.action_info_name": "名称：",
+    "infrastructure.msg.action_info_desc": "描述：",
+
+    "infrastructure.msg.feature_status": "调试特性 %s 当前状态：%s",
+    "infrastructure.msg.feature_enabled": "已启用调试特性：%s",
+    "infrastructure.msg.feature_disabled": "已禁用调试特性：%s",
+    "infrastructure.msg.feature_unchanged": "调试特性 %s 已处于 %s 状态，无需变更。",
+    "infrastructure.msg.feature_not_found": "未找到调试特性：%s",
+
+    "infrastructure.msg.state_enabled": "已启用",
+    "infrastructure.msg.state_disabled": "已禁用",
+
+    "infrastructure.msg.list_actions_title": "==== 调试动作（%s）====",
+    "infrastructure.msg.list_features_title": "==== 调试特性（%s）====",
+    "infrastructure.msg.list_empty": "（暂无注册项）",
+
+    "infrastructure.msg.info_header": "Billy's Mod infrastructure",
+    "infrastructure.msg.info_version": "版本：%s",
+    "infrastructure.msg.info_desc": "通用客户端基础设施 —— 用于以模块方式扩展 /inf 的模块化框架。",
+    "infrastructure.msg.info_modules": "已注册模块：",
+    "infrastructure.msg.info_name": "名称：",
+    "infrastructure.msg.info_version_label": "版本：",
+    "infrastructure.msg.info_desc_label": "描述：",
+    "infrastructure.msg.info_contrib_commands": "贡献的命令：",
+    "infrastructure.msg.info_contrib_configs": "贡献的配置：",
+    "infrastructure.msg.info_config_count": "(%s 项)",
+    "infrastructure.msg.module_debugger_name": "调试器",
+    "infrastructure.msg.module_debugger_desc": "内置调试模块：执行调试动作、开关调试特性，并通过 /inf dbg 命令树查看它们。",
+
+    "infrastructure.msg.module_not_found": "未找到模块：%s",
+    "infrastructure.msg.module_config_none": "模块 %s 未注册配置。",
+
+    "infrastructure.msg.config_path_unknown": "未知配置路径：%s",
+    "infrastructure.msg.config_set": "已设置 %s：%s → %s",
+    "infrastructure.msg.config_reset": "已重置 %s：%s → %s",
+    "infrastructure.msg.config_error": "配置 %s 错误：%s",
+    "infrastructure.msg.config_set_usage": "用法：/inf config set <模块:路径=值> [模块:路径=值 ...]",
+    "infrastructure.msg.config_set_need_value": "配置 %s 缺少 = 值，请使用 模块:路径=值 的形式",
+    "infrastructure.msg.config_reloaded_all": "已重载全部模块配置（已重放服务器锁定值）。",
+    "infrastructure.msg.config_reloaded": "已重载配置段 '%s'（已重放服务器锁定值）。",
+    "infrastructure.msg.config_target_not_found": "未找到配置段：%s（形如 模块:配置段，配置段为 config 时可省略）",
+    "infrastructure.msg.config_no_gui": "配置段 '%s' 无可用的配置界面。",
+    "infrastructure.msg.config_gui_opened": "已打开 %s 的配置界面。",
+
+    "infrastructure.gui.title": "Billy's Mod infrastructure",
+    "infrastructure.gui.category.general": "通用设置",
+    "infrastructure.gui.category.features": "调试特性",
+    "infrastructure.gui.no_features": "当前没有已注册的调试特性。",
+
+    "infrastructure.gui.option.verbose_logging": "详细日志",
+    "infrastructure.gui.option.verbose_logging.desc": "输出调试框架的详细日志，包括注册明细与动作执行轨迹。",
+    "infrastructure.gui.option.show_action_stack_trace": "显示异常堆栈",
+    "infrastructure.gui.option.show_action_stack_trace.desc": "调试动作执行失败时，在聊天栏附加异常堆栈摘要（最多 5 帧）。",
+
+    "text.autoconfig.infrastructure.title": "Billy's Mod infrastructure 设置",
+    "text.autoconfig.infrastructure.option.verboseLogging": "详细日志",
+    "text.autoconfig.infrastructure.option.verboseLogging.@Tooltip": "输出调试框架的详细日志，包括注册明细与动作执行轨迹。",
+    "text.autoconfig.infrastructure.option.showActionStackTrace": "显示异常堆栈",
+    "text.autoconfig.infrastructure.option.showActionStackTrace.@Tooltip": "调试动作执行失败时，在聊天栏附加异常堆栈摘要（最多 5 帧）。"
+}

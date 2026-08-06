@@ -11,7 +11,7 @@ import net.minecraft.client.gui.screen.Screen;
  *
  * <p>每个模块通过 {@link com.billy65536.infrastructure.core.module.IModule#getConfigDescriptors()}
  * 返回一组描述符，框架（{@code /inf config}、{@code ConfigLocker}）据此统一读写配置，
- * 而<b>不再直接持有模块的配置类</b>——这是把配置管理收归 billy-inf 核心的关键落点：
+ * 而<b>不再直接持有模块的配置类</b>——这是把配置管理收归 infrastructure 核心的关键落点：
  * 模块配置类对框架完全不可见，框架只通过本描述符持有的 {@code Object} 实例做反射读写。</p>
  *
  * <p>描述符承载：</p>
