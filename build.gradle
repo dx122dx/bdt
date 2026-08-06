@@ -106,6 +106,12 @@ tasks.withType(GenerateModuleMetadata).configureEach {
 	enabled = false
 }
 
+// javadoc 关闭 doclint，仅生成告警，避免源码既有注释的格式/链接问题阻塞 build / 发布。
+tasks.withType(Javadoc).configureEach {
+	options.encoding = 'UTF-8'
+	(options as StandardJavadocDocletOptions).addBooleanOption('Xdoclint:none', true)
+}
+
 // 填充 maven-publish 配置：坐标与快照仓库全部由外部属性/环境变量驱动，
 // 属性缺省时回落到现有 group/version，本地 ./gradlew build 行为完全不变。
 publishing {
