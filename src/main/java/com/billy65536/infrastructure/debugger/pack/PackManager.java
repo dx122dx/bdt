@@ -1,10 +1,10 @@
-package com.billy65536.infrastructure.debugger.builtin;
+package com.billy65536.infrastructure.debugger.pack;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import com.billy65536.infrastructure.InfrastructureMod;
-import com.billy65536.infrastructure.debugger.api.DebuggerBuiltinProvider;
+import com.billy65536.infrastructure.debugger.api.FunctionPackageContributor;
 
 import net.fabricmc.loader.api.entrypoint.EntrypointContainer;
 import net.fabricmc.loader.api.FabricLoader;
@@ -23,24 +23,24 @@ import net.fabricmc.loader.api.FabricLoader;
  * {@link NoClassDefFoundError}，使 {@code isModLoaded} 判断形同虚设。</p>
  *
  * <p>因此本类<b>只引用各内置包的注册入口类</b>（如外部 mod 提供的
- * {@code XxxBuiltins}），绝不引用其中的具体实现类。入口类作为独立类，只有在
+ * {@code XxxContributor}），绝不引用其中的具体实现类。入口类作为独立类，只有在
  * {@code register()} 被实际调用时才由 JVM 加载并解析其常量池，此时目标模组必然在场。</p>
  *
  * <h2>扩展方式</h2>
  *
  * <p>内置调试包由<b>外部 mod</b> 通过 infrastructure 的调试框架扩展点注入：</p>
  * <ol>
- *   <li>外部 mod 实现 {@link DebuggerBuiltinProvider} 接口；</li>
+ *   <li>外部 mod 实现 {@link FunctionPackageContributor} 接口；</li>
  *   <li>在其 {@code fabric.mod.json} 注册自定义 entrypoint {@code "infrastructure:debugger"}，
  *       值为该实现类的全限定名；</li>
- *   <li>在 {@link DebuggerBuiltinProvider#contribute} 中调用
- *       {@code contributor.add(requiredModId, displayName, XxxBuiltins::register)}。</li>
+ *   <li>在 {@link FunctionPackageContributor#contribute} 中调用
+ *       {@code contributor.add(requiredModId, displayName, XxxFunctions::register)}。</li>
  * </ol>
  *
  * <p>infrastructure 自身不再硬编码任何具体目标模组的调试逻辑；本类的
  * {@link #PACKS} 仅保留纯框架内置（当前为空）。</p>
  */
-public final class BuiltinsManager {
+public final class PackManager {
 
     /**
      * 内置包描述。
@@ -50,48 +50,48 @@ public final class BuiltinsManager {
      * @param entry         注册入口。必须是独立入口类的方法引用，
      *                      不可写成持有目标模组类型的 lambda 闭包，否则会破坏惰性加载
      */
-    private record BuiltinPack(String requiredModId, String displayName, Runnable entry) {}
+    private record FunctionPack(String requiredModId, String displayName, Runnable entry) {}
 
     /** 框架内置包（当前为空；外部 mod 的包经由 {@code infrastructure:debugger} entrypoint 注入）。 */
-    private static final List<BuiltinPack> PACKS = List.of();
+    private static final List<FunctionPack> PACKS = List.of();
 
-    private BuiltinsManager() {}
+    private PackManager() {}
 
     /**
      * 注册全部内置包：先合并框架内置包与外部 mod 注入的包，再逐包判定目标模组是否加载。
      *
      * <p>外部 mod 通过 {@code "infrastructure:debugger"} entrypoint 贡献其内置包，
-     * 由 {@link DebuggerBuiltinProvider} 收集。注册过程中的任何 {@link Throwable}
+     * 由 {@link FunctionPackageContributor} 收集。注册过程中的任何 {@link Throwable}
      * （含 {@link NoClassDefFoundError}、{@link LinkageError} 等类加载期错误）都会被
      * 捕获并记录，绝不阻断模组初始化——调试工具的可用性优先级低于宿主游戏的启动成功率。</p>
      */
     public static void registerAll() {
         FabricLoader loader = FabricLoader.getInstance();
-        List<BuiltinPack> all = new ArrayList<>(PACKS);
+        List<FunctionPack> all = new ArrayList<>(PACKS);
 
         // 收集外部 mod 通过 "infrastructure:debugger" entrypoint 注入的内置包
-        for (EntrypointContainer<DebuggerBuiltinProvider> container
-                : loader.getEntrypointContainers("infrastructure:debugger", DebuggerBuiltinProvider.class)) {
+        for (EntrypointContainer<FunctionPackageContributor> container
+                : loader.getEntrypointContainers("infrastructure:debugger", FunctionPackageContributor.class)) {
             try {
                 container.getEntrypoint().contribute((requiredModId, displayName, entry) ->
-                        all.add(new BuiltinPack(requiredModId, displayName, entry)));
+                        all.add(new FunctionPack(requiredModId, displayName, entry)));
             } catch (Throwable t) {
-                InfrastructureMod.LOGGER.error("Failed to collect builtin packs from mod '{}'",
+                InfrastructureMod.LOGGER.error("Failed to collect function packs from mod '{}'",
                         container.getProvider().getMetadata().getId(), t);
             }
         }
 
-        for (BuiltinPack pack : all) {
+        for (FunctionPack pack : all) {
             if (!loader.isModLoaded(pack.requiredModId())) {
-                InfrastructureMod.LOGGER.info("Builtin pack '{}': skipped (mod '{}' not loaded)",
+                InfrastructureMod.LOGGER.info("Function pack '{}': skipped (mod '{}' not loaded)",
                         pack.displayName(), pack.requiredModId());
                 continue;
             }
             try {
                 pack.entry().run();
-                InfrastructureMod.LOGGER.info("Builtin pack '{}': registered", pack.displayName());
+                InfrastructureMod.LOGGER.info("Function pack '{}': registered", pack.displayName());
             } catch (Throwable t) {
-                InfrastructureMod.LOGGER.error("Builtin pack '{}': registration failed, skipping",
+                InfrastructureMod.LOGGER.error("Function pack '{}': registration failed, skipping",
                         pack.displayName(), t);
             }
         }

@@ -7,12 +7,12 @@ import com.billy65536.infrastructure.InfrastructureMod;
 import com.billy65536.infrastructure.core.config.ConfigDescriptor;
 import com.billy65536.infrastructure.core.config.ConfigPath;
 import com.billy65536.infrastructure.core.module.IModule;
-import com.billy65536.infrastructure.debugger.builtin.BuiltinsManager;
 import com.billy65536.infrastructure.debugger.config.DebuggerConfig;
 import com.billy65536.infrastructure.debugger.config.DebuggerConfigLoader;
 import com.billy65536.infrastructure.debugger.config.DebuggerFeatureConfig;
 import com.billy65536.infrastructure.debugger.config.DebuggerFeaturesScreen;
 import com.billy65536.infrastructure.debugger.config.FeatureStateStore;
+import com.billy65536.infrastructure.debugger.pack.PackManager;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.loader.api.FabricLoader;
@@ -83,7 +83,7 @@ public final class DebuggerModule implements IModule {
     public void onInitializeModule() {
         DebuggerConfigLoader.register();
         FeatureStateStore.load();
-        BuiltinsManager.registerAll();
+        PackManager.registerAll();
     }
 
     // ==================== 配置 ====================
