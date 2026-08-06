@@ -2,6 +2,8 @@ package com.billy65536.infrastructure.debugger.core.action;
 
 import java.util.List;
 
+import com.mojang.brigadier.suggestion.SuggestionProvider;
+import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
@@ -55,5 +57,24 @@ public interface IDebugAction {
      */
     default List<String> suggest(MinecraftClient client, String[] args) {
         return List.of();
+    }
+
+    /**
+     * 可选：为 {@code [args...]} 参数提供<strong>层级化</strong>补全器，覆盖默认
+     * {@link #suggest} 的扁平列表补全。
+     *
+     * <p>返回非 null 时，框架将直接委托该 {@link SuggestionProvider}（而非调用
+     * {@link #suggest}），从而支持基于 {@code infrastructure.core.cli.CliCompletion}
+     * 的按 {@code . : /} 分隔路径逐层钻取补全。返回 null（默认）则回退到
+     * {@link #suggest} 返回的扁平候选列表。</p>
+     *
+     * <p>典型用法：配置路径类动作用
+     * {@code CliCompletion.builder().separators(".:/").multiple(true)
+     * .keySource(ctx -> ConfigManager.suggestPathsFull("")).build()} 实现逐层钻取。</p>
+     *
+     * @return 层级化补全器，或 null 表示使用默认 {@link #suggest}
+     */
+    default SuggestionProvider<FabricClientCommandSource> getArgsCompleter() {
+        return null;
     }
 }

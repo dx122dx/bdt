@@ -76,12 +76,11 @@ public final class DebuggerCommands {
             idSuggestions(() -> FeatureRegistry.getAll().stream().map(IDebugFeature::getId).toList());
 
     /**
-     * 动作参数节点的补全器：先按已输入的 id 找到对应动作，再委托其
-     * {@link IDebugAction#suggest} 提供下一参数的候选。交由 {@link CliCompletion}
-     * 的位置模式负责「只替换正在输入的片段、不覆盖已输入参数、空白后循环」等逻辑。
-     * 动作未注册或无候选时退化为无补全。
+     * 扁平候选回退补全器：调用 {@link IDebugAction#suggest} 取得候选，按位置模式处理多参数。
+     * 由 {@link CliCompletion} 位置模式负责「只替换正在输入的片段、不覆盖已输入参数、
+     * 空白后循环」等逻辑。动作未注册或无候选时退化为无补全。
      */
-    private static final SuggestionProvider<FabricClientCommandSource> ACTION_ARGS_SUGGESTIONS =
+    private static final SuggestionProvider<FabricClientCommandSource> ACTION_ARGS_FALLBACK =
             CliCompletion.builder()
                     .multiple(true)
                     .positional((ctx, completed) -> {
@@ -91,6 +90,23 @@ public final class DebuggerCommands {
                         return action.suggest(ctx.getSource().getClient(), completed);
                     })
                     .build();
+
+    /**
+     * 动作参数节点的补全器：先按已输入的 id 找到对应动作。
+     * 若动作提供了层级化补全器（{@link IDebugAction#getArgsCompleter()}，基于
+     * {@code infrastructure.core.cli.CliCompletion}）则直接委托，实现配置路径按
+     * {@code . : /} 分隔逐层钻取；否则回退到 {@link #ACTION_ARGS_FALLBACK}（即
+     * {@link IDebugAction#suggest} 的扁平候选列表）。动作未注册时无补全。
+     */
+    private static final SuggestionProvider<FabricClientCommandSource> ACTION_ARGS_SUGGESTIONS =
+            (ctx, builder) -> {
+                Identifier rawId = ctx.getArgument("id", Identifier.class);
+                IDebugAction action = ActionRegistry.get(normalizeActionId(rawId));
+                if (action == null) return builder.buildFuture();
+                SuggestionProvider<FabricClientCommandSource> completer = action.getArgsCompleter();
+                if (completer != null) return completer.getSuggestions(ctx, builder);
+                return ACTION_ARGS_FALLBACK.getSuggestions(ctx, builder);
+            };
 
     // ==================== 命令构建 ====================
 
