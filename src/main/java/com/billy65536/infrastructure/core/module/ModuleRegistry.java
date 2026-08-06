@@ -13,7 +13,7 @@ import com.billy65536.infrastructure.InfrastructureMod;
  * 全局模块注册表（静态单例）。
  *
  * <p>所有 {@link IModule} 实现通过本注册表登记。登记即一次声明全部能力：
- * 元数据（id/版本/名称/描述）、配置对象（{@link IModule#getConfig()}）、
+ * 元数据（id/版本/名称/描述）、配置描述符（{@link IModule#getConfigDescriptors()}）、
  * 以及命令子树（{@link IModule#buildCommands()}，由 {@link ModuleCommandRegistrar} 统一挂载）。</p>
  *
  * <p>登记有两种途径：</p>

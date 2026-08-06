@@ -4,13 +4,18 @@ import java.util.Collection;
 import java.util.List;
 
 import com.billy65536.infrastructure.InfrastructureMod;
+import com.billy65536.infrastructure.core.config.ConfigDescriptor;
+import com.billy65536.infrastructure.core.config.ConfigPath;
 import com.billy65536.infrastructure.core.module.IModule;
 import com.billy65536.infrastructure.debugger.builtin.BuiltinsManager;
+import com.billy65536.infrastructure.debugger.config.DebuggerConfig;
 import com.billy65536.infrastructure.debugger.config.DebuggerConfigLoader;
+import com.billy65536.infrastructure.debugger.config.DebugToolsConfigScreen;
 import com.billy65536.infrastructure.debugger.config.FeatureStateStore;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
 
 /**
@@ -72,8 +77,22 @@ public final class DebuggerModule implements IModule {
     // ==================== 配置 ====================
 
     @Override
-    public Object getConfig() {
-        return DebuggerConfigLoader.get();
+    public List<ConfigDescriptor> getConfigDescriptors() {
+        // 段名取 "config"（省略形态即 /inf config debugger:xxx）；
+        // 单体配置对象，dangerous=false，GUI 打开 DebugToolsConfigScreen。
+        ConfigPath path = ConfigPath.of(ID, "config", "");
+        return List.of(ConfigDescriptor.withGui(
+                path,
+                DebuggerConfigLoader::get,
+                new DebuggerConfig(),
+                () -> {
+                    net.minecraft.client.MinecraftClient client =
+                            net.minecraft.client.MinecraftClient.getInstance();
+                    if (client != null) {
+                        Screen parent = client.currentScreen;
+                        client.setScreen(DebugToolsConfigScreen.create(parent));
+                    }
+                }));
     }
 
     @Override

@@ -55,6 +55,10 @@ dependencies {
 
 	// ModMenu 为可选依赖：仅编译期需要 API，运行时缺失不影响功能
 	modCompileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+
+	// Test dependencies — JUnit 提供单元测试能力（ConfigLocker 等纯逻辑测试无需 Minecraft 引导）
+	testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 processResources {
@@ -68,6 +72,15 @@ processResources {
 
 tasks.withType(JavaCompile).configureEach {
 	it.options.release = 17
+}
+
+test {
+	useJUnitPlatform()
+	testLogging {
+		events "passed", "skipped", "failed"
+		exceptionFormat "full"
+		showStandardStreams = false
+	}
 }
 
 java {

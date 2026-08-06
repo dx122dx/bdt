@@ -3,6 +3,7 @@ package com.billy65536.infrastructure.core.module;
 import java.util.Collection;
 import java.util.List;
 
+import com.billy65536.infrastructure.core.config.ConfigDescriptor;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.text.Text;
@@ -13,7 +14,7 @@ import net.minecraft.text.Text;
  * {@link ModuleRegistry#discover()} 基于 Java SPI（META-INF/services）自动发现并登记。
  *
  * <p>登记是「一次声明全部能力」：模块 id / 版本 / 名称 / 描述（强制），
- * 以及可选的配置对象（{@link #getConfig()}）与命令树（{@link #buildCommands()}）。
+ * 以及可选的配置对象（{@link #getConfigDescriptors()}）与命令树（{@link #buildCommands()}）。
  * 注册表与命令登记器在 {@code register} 时统一接管配置索引与命令挂载，
  * 调用方无需再做额外装配。</p>
  *
@@ -58,18 +59,23 @@ public interface IModule {
     // ==================== 可选：模块配置 ====================
 
     /**
-     * 模块配置对象（POJO）。默认无配置。
+     * 模块暴露给框架的配置描述符列表。默认无配置。
      *
-     * <p>返回非 null 时，框架会按对象的实际类型自动构建点分路径索引，
-     * 供 {@code /inf config get|set|reset <moduleId:path>} 访问。
-     * 配置类须有无参构造器（用于默认值快照）。</p>
+     * <p>每个 {@link ConfigDescriptor} 持有配置实例（经 Supplier 现取）、默认值快照、
+     * 危险项标记与 GUI 回调。框架据此统一构建点分路径索引，供
+     * {@code /inf config get|set|reset|gui|reload <moduleId:path>} 访问。
+     * 配置对象通过描述符获取，框架不持有模块配置类的编译期引用。</p>
+     *
+     * <p>含危险配置项（server-lock 强制值）的模块，应把对应描述符标记为
+     * {@code dangerous}，并在模块初始化时调
+     * {@code ConfigLocker.registerDefaultLocks(...)} 注册默认锁定值。</p>
      */
-    default Object getConfig() {
-        return null;
+    default List<ConfigDescriptor> getConfigDescriptors() {
+        return List.of();
     }
 
     /**
-     * 配置持久化钩子。{@code /inf config set|reset} 写入后由框架调用，
+     * 配置持久化钩子。{@code /inf config set|reset|reload} 写入后由框架调用，
      * 模块自行决定如何落盘（AutoConfig / Gson / FeatureStateStore 等）。
      * 默认空实现（配置仅在内存中生效）。
      */
