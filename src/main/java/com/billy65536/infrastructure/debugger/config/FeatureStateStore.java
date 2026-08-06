@@ -18,22 +18,22 @@ import com.google.gson.reflect.TypeToken;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.util.Identifier;
 
-/**
- * 调试特性启用状态的持久化存储。
- *
- * <p>以扁平的 {@code {"命名空间:路径": true/false}} 结构写入
- * {@code config/infrastructure-features.json}。</p>
- *
- * <p>不并入 AutoConfig 的配置文件：特性数量由运行时注册决定，而
- * AutoConfig 的 {@code GsonConfigSerializer} 以静态类结构为准反序列化，
- * 未知字段会被静默丢弃，动态 Map 混入同一文件将在每次保存时被清空。</p>
- *
- * <p>已持久化但当前未注册的条目（对应模块被移除或尚未初始化）会保留在内存中
- * 并原样写回，避免注册顺序变化导致用户设置被静默重置。</p>
- */
-public final class FeatureStateStore {
+    /**
+     * 调试特性启用状态的持久化存储，对应 {@code debugger:feature} 配置段。
+     *
+     * <p>以扁平的 {@code {"命名空间:路径": true/false}} 结构写入
+     * {@code config/infrastructure-debugger-features.json}。</p>
+     *
+     * <p>不并入 AutoConfig 的配置文件：特性数量由运行时注册决定，而
+     * AutoConfig 的 {@code GsonConfigSerializer} 以静态类结构为准反序列化，
+     * 未知字段会被静默丢弃，动态 Map 混入同一文件将在每次保存时被清空。</p>
+     *
+     * <p>已持久化但当前未注册的条目（对应模块被移除或尚未初始化）会保留在内存中
+     * 并原样写回，避免注册顺序变化导致用户设置被静默重置。</p>
+     */
+    public final class FeatureStateStore {
 
-    private static final String FILENAME = "infrastructure-features.json";
+        private static final String FILENAME = "infrastructure-debugger-features.json";
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 

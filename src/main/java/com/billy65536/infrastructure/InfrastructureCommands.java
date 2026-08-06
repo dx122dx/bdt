@@ -282,7 +282,7 @@ public final class InfrastructureCommands {
     private static final SuggestionProvider<FabricClientCommandSource> CONFIG_PATH_SUGGESTIONS =
             CliCompletion.builder()
                     .separators(".:/")
-                    .keySource(ctx -> ConfigManager.suggestPaths(prefixOf(ctx, "path")))
+                    .keySource(ctx -> ConfigManager.suggestPathsFull(prefixOf(ctx, "path")))
                     .build();
 
     /**
@@ -298,7 +298,7 @@ public final class InfrastructureCommands {
                     .separators(".:/")
                     .assignment(true)
                     .multiple(true)
-                    .keySource(ctx -> ConfigManager.suggestPaths(prefixOf(ctx, "assignments")))
+                    .keySource(ctx -> ConfigManager.suggestPathsFull(prefixOf(ctx, "assignments")))
                     .valueProvider((ctx, key) -> {
                         ConfigDescriptor d = ConfigManager.findDescriptorByPath(key);
                         if (d == null) return List.of();

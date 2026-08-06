@@ -57,9 +57,9 @@
     "infrastructure.gui.option.show_action_stack_trace": "Show Stack Trace",
     "infrastructure.gui.option.show_action_stack_trace.desc": "Append an exception stack trace summary (up to 5 frames) to chat when a debug action fails.",
 
-    "text.autoconfig.infrastructure.title": "Billy's Mod infrastructure Settings",
-    "text.autoconfig.infrastructure.option.verboseLogging": "Verbose Logging",
-    "text.autoconfig.infrastructure.option.verboseLogging.@Tooltip": "Log detailed framework information, including registration details and action execution traces.",
-    "text.autoconfig.infrastructure.option.showActionStackTrace": "Show Stack Trace",
-    "text.autoconfig.infrastructure.option.showActionStackTrace.@Tooltip": "Append an exception stack trace summary (up to 5 frames) to chat when a debug action fails."
+    "text.autoconfig.infrastructure-debugger-config.title": "Billy's Mod infrastructure Settings",
+    "text.autoconfig.infrastructure-debugger-config.option.verboseLogging": "Verbose Logging",
+    "text.autoconfig.infrastructure-debugger-config.option.verboseLogging.@Tooltip": "Log detailed framework information, including registration details and action execution traces.",
+    "text.autoconfig.infrastructure-debugger-config.option.showActionStackTrace": "Show Stack Trace",
+    "text.autoconfig.infrastructure-debugger-config.option.showActionStackTrace.@Tooltip": "Append an exception stack trace summary (up to 5 frames) to chat when a debug action fails."
 }

@@ -10,13 +10,17 @@ import com.billy65536.infrastructure.core.module.IModule;
 import com.billy65536.infrastructure.debugger.builtin.BuiltinsManager;
 import com.billy65536.infrastructure.debugger.config.DebuggerConfig;
 import com.billy65536.infrastructure.debugger.config.DebuggerConfigLoader;
-import com.billy65536.infrastructure.debugger.config.DebugToolsConfigScreen;
+import com.billy65536.infrastructure.debugger.config.DebuggerFeatureConfig;
+import com.billy65536.infrastructure.debugger.config.DebuggerFeaturesScreen;
 import com.billy65536.infrastructure.debugger.config.FeatureStateStore;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
+
+import me.shedaniel.autoconfig.AutoConfig;
 
 /**
  * debugger 子模块对 {@link IModule} 的实现，使 debugger 以「模块」身份接入 infrastructure 核心框架。
@@ -32,6 +36,14 @@ import net.minecraft.text.Text;
  *   <li>{@code /inf dbg ...} 命令树在登记时统一挂入
  *       {@link com.billy65536.infrastructure.core.module.ModuleCommandRegistrar}，
  *       不再由 {@code InfrastructureCommands} 显式挂载。</li>
+ * </ul>
+ *
+ * <p>配置分两段存放，各自独立 GUI：</p>
+ * <ul>
+ *   <li>{@code debugger:config} —— 主配置（AutoConfig 模型），GUI 恢复为 AutoConfig 原生界面，
+ *       持久化到 {@code config/debugger-config.json}；</li>
+ *   <li>{@code debugger:feature} —— 调试特性开关（动态 Map，数量由运行时注册决定），
+ *       持久化到 {@code config/debugger-features.json}，GUI 为独立的特性开关界面。</li>
  * </ul>
  *
  * <p>版本号取自模组元数据（与 infrastructure 一致），无需与 mod_version 手工同步。</p>
@@ -78,26 +90,49 @@ public final class DebuggerModule implements IModule {
 
     @Override
     public List<ConfigDescriptor> getConfigDescriptors() {
-        // 段名取 "config"（省略形态即 /inf config debugger:xxx）；
-        // 单体配置对象，dangerous=false，GUI 打开 DebugToolsConfigScreen。
-        ConfigPath path = ConfigPath.of(ID, "config", "");
-        return List.of(ConfigDescriptor.withGui(
-                path,
+        // debugger:config —— 主配置（AutoConfig 模型），GUI 恢复为 AutoConfig 原生界面。
+
+        ConfigPath configPath = ConfigPath.of(ID, "config", "");
+        ConfigDescriptor configDesc = ConfigDescriptor.withGui(
+                configPath,
                 DebuggerConfigLoader::get,
                 new DebuggerConfig(),
-                () -> {
-                    net.minecraft.client.MinecraftClient client =
-                            net.minecraft.client.MinecraftClient.getInstance();
-                    if (client != null) {
-                        Screen parent = client.currentScreen;
-                        client.setScreen(DebugToolsConfigScreen.create(parent));
-                    }
-                }));
+                DebuggerModule::openConfigGui);
+
+        // debugger:feature —— 调试特性开关（动态 Map，非静态字段），独立 GUI。
+        // 配置对象为占位实例：特性状态由 FeatureStateStore 动态持久化，反射 get/set 为 no-op。
+        ConfigPath featurePath = ConfigPath.of(ID, "feature", "");
+        ConfigDescriptor featureDesc = ConfigDescriptor.withGui(
+                featurePath,
+                () -> new DebuggerFeatureConfig(),
+                new DebuggerFeatureConfig(),
+                DebuggerModule::openFeatureGui);
+
+        return List.of(configDesc, featureDesc);
+    }
+
+    /** 打开 debugger:config 的 AutoConfig 原生 GUI（parent 为当前界面）。 */
+    private static void openConfigGui() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client != null) {
+            Screen parent = client.currentScreen;
+            client.setScreen(AutoConfig.getConfigScreen(DebuggerConfig.class, parent).get());
+        }
+    }
+
+    /** 打开 debugger:feature 的独立特性开关 GUI（parent 为当前界面）。 */
+    private static void openFeatureGui() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client != null) {
+            Screen parent = client.currentScreen;
+            client.setScreen(DebuggerFeaturesScreen.create(parent));
+        }
     }
 
     @Override
     public void saveConfig() {
         DebuggerConfigLoader.save();
+        FeatureStateStore.save();
     }
 
     // ==================== 命令 ====================

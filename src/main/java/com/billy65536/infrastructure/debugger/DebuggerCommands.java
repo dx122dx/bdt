@@ -7,8 +7,9 @@ import java.util.function.Supplier;
 
 import com.billy65536.infrastructure.core.cli.ArgTokenizer;
 import com.billy65536.infrastructure.core.cli.CliCompletion;
-import com.billy65536.infrastructure.debugger.config.DebugToolsConfigScreen;
 import com.billy65536.infrastructure.debugger.config.DebuggerConfigLoader;
+import com.billy65536.infrastructure.debugger.config.DebuggerFeaturesScreen;
+
 import com.billy65536.infrastructure.debugger.core.action.ActionRegistry;
 import com.billy65536.infrastructure.debugger.core.action.IDebugAction;
 import com.billy65536.infrastructure.debugger.core.feature.FeatureRegistry;
@@ -38,7 +39,6 @@ import net.minecraft.util.Identifier;
  *   <li>{@code /inf dbg feat about <id>} —— 查询调试特性的启用状态</li>
  *   <li>{@code /inf dbg feat enable|disable <id>} —— 启用/禁用调试特性</li>
  *   <li>{@code /inf dbg list} —— 列出全部已注册项</li>
- *   <li>{@code /inf dbg gui} —— 打开配置界面</li>
  * </ul>
  */
 public final class DebuggerCommands {
@@ -129,6 +129,8 @@ public final class DebuggerCommands {
         var featNode = ClientCommandManager.literal("feat");
         featNode.then(featIdNode("about",
                 (client, id) -> showFeature(client, id)));
+        featNode.then(ClientCommandManager.literal("gui")
+                .executes(ctx -> openFeatureGui(ctx.getSource().getClient())));
         featNode.then(featIdNode("enable",
                 (client, id) -> setFeature(client, id, true)));
         featNode.then(featIdNode("disable",
@@ -138,10 +140,6 @@ public final class DebuggerCommands {
         // ===== /inf dbg list =====
         root.then(ClientCommandManager.literal("list")
                 .executes(ctx -> listAll(ctx.getSource().getClient())));
-
-        // ===== /inf dbg gui =====
-        root.then(ClientCommandManager.literal("gui")
-                .executes(ctx -> openGui(ctx.getSource().getClient())));
 
         return root;
     }
@@ -310,9 +308,9 @@ public final class DebuggerCommands {
         return 1;
     }
 
-    /** 打开主配置界面。 */
-    private static int openGui(MinecraftClient client) {
-        client.send(() -> client.setScreen(DebugToolsConfigScreen.create(client.currentScreen)));
+    /** 打开特性配置界面（即 debugger:feature 的 GUI）。 */
+    private static int openFeatureGui(MinecraftClient client) {
+        client.send(() -> { client.setScreen(DebuggerFeaturesScreen.create(client.currentScreen)); });
         return 1;
     }
 
@@ -364,9 +362,8 @@ public final class DebuggerCommands {
      * 归一化 {@link IdentifierArgumentType} 解析出的 {@link Identifier}。
      *
      * <p>调试动作 / 特性由各上层 mod 以<b>自身</b>命名空间注册（如
-     * {@code csdbg:cs.configuration-locker.disable-apply-all}），因此
-     * <b>显式带命名空间的输入必须原样保留</b>——早期版本一律改写成
-     * {@code infrastructure} 命名空间，导致所有非本模组注册项永远查不到。</p>
+     * {@code infdbg:exmaple.class.feat}），因此 <b>显式带命名空间的输入必须
+     * 原样保留</b>。</p>
      *
      * <p>仅当输入是裸名时才需要推断命名空间：{@link IdentifierArgumentType} 会把裸名
      * （如 {@code cs.foo}）补成 {@code minecraft} 命名空间。此时在注册表中按 path 回查，

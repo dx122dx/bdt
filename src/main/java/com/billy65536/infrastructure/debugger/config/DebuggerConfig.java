@@ -5,15 +5,16 @@ import me.shedaniel.autoconfig.annotation.Config;
 import me.shedaniel.autoconfig.annotation.ConfigEntry;
 
 /**
- * 调试模组自身的固定配置项（AutoConfig 模型）。
+ * 调试模块自身的固定配置项（AutoConfig 模型），对应 {@code debugger:config} 配置段。
  *
- * <p>持久化到 {@code config/infrastructure.json}，JSON 结构与本类字段
+ * <p>持久化到 {@code config/debugger-config.json}，JSON 结构与本类字段
  * 一一对应。</p>
  *
  * <p>注意：调试特性（Feature）的启用状态<b>不在此处</b>——其数量由运行时注册决定，
- * 无法用静态字段表达，改由 {@link FeatureStateStore} 独立持久化。</p>
+ * 无法用静态字段表达，改由 {@link FeatureStateStore} 独立持久化（对应
+ * {@code debugger:feature} 配置段）。</p>
  */
-@Config(name = "infrastructure")
+@Config(name = "infrastructure-debugger")
 public class DebuggerConfig implements ConfigData {
 
     /** 是否输出框架的详细日志（注册明细、动作执行轨迹等）。 */

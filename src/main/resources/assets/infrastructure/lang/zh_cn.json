@@ -57,9 +57,9 @@
     "infrastructure.gui.option.show_action_stack_trace": "显示异常堆栈",
     "infrastructure.gui.option.show_action_stack_trace.desc": "调试动作执行失败时，在聊天栏附加异常堆栈摘要（最多 5 帧）。",
 
-    "text.autoconfig.infrastructure.title": "Billy's Mod infrastructure 设置",
-    "text.autoconfig.infrastructure.option.verboseLogging": "详细日志",
-    "text.autoconfig.infrastructure.option.verboseLogging.@Tooltip": "输出调试框架的详细日志，包括注册明细与动作执行轨迹。",
-    "text.autoconfig.infrastructure.option.showActionStackTrace": "显示异常堆栈",
-    "text.autoconfig.infrastructure.option.showActionStackTrace.@Tooltip": "调试动作执行失败时，在聊天栏附加异常堆栈摘要（最多 5 帧）。"
+    "text.autoconfig.infrastructure-debugger-config.title": "Billy's Mod infrastructure 设置",
+    "text.autoconfig.infrastructure-debugger-config.option.verboseLogging": "详细日志",
+    "text.autoconfig.infrastructure-debugger-config.option.verboseLogging.@Tooltip": "输出调试框架的详细日志，包括注册明细与动作执行轨迹。",
+    "text.autoconfig.infrastructure-debugger-config.option.showActionStackTrace": "显示异常堆栈",
+    "text.autoconfig.infrastructure-debugger-config.option.showActionStackTrace.@Tooltip": "调试动作执行失败时，在聊天栏附加异常堆栈摘要（最多 5 帧）。"
 }

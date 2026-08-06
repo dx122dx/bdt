@@ -7,7 +7,7 @@ import me.shedaniel.autoconfig.ConfigHolder;
 import me.shedaniel.autoconfig.serializer.GsonConfigSerializer;
 
 /**
- * 调试模组固定配置的加载器：AutoConfig 的薄封装。
+ * 调试模块固定配置的加载器：AutoConfig 的薄封装。
  *
  * <p>持久化完全由 AutoConfig 的 {@code GsonConfigSerializer} 接管，
  * 写入 {@code config/infrastructure.json}。</p>
