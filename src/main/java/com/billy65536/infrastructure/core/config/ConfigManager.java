@@ -8,7 +8,6 @@ import java.util.Locale;
 import com.billy65536.infrastructure.core.module.IModule;
 import com.billy65536.infrastructure.core.module.ModuleConfigReflectionAccessor;
 import com.billy65536.infrastructure.core.module.ModuleRegistry;
-import com.billy65536.infrastructure.core.security.SecurityPolicyViolationException;
 import com.billy65536.infrastructure.core.security.server.ConfigLocker;
 
 /**
@@ -19,8 +18,8 @@ import com.billy65536.infrastructure.core.security.server.ConfigLocker;
  * 使模块配置访问成为 billy-inf 的通用能力。</p>
  *
  * <p>路径解析规则见 {@link ConfigPath}：完整形态 {@code <module>:<id>/<dot.path>}，
- * 省略形态 {@code <module>:<dot.path>}（id==module）。本管理器按 module 查模块，
- * 再在模块的描述符列表中按 id 匹配段，最后用 dot.path 调
+ * 省略形态 {@code <module>:<dot.path>}（段名为默认值 {@code config} 时可省）。
+ * 本管理器按 module 查模块，再在模块的描述符列表中按 id 匹配段，最后用 dot.path 调
  * {@link ModuleConfigReflectionAccessor} 做反射读写。</p>
  */
 public final class ConfigManager {
@@ -57,21 +56,66 @@ public final class ConfigManager {
         return new Resolved(module, descriptor, cp.dotPath());
     }
 
-    /** 在模块描述符列表中按 id 匹配段名；id 与 module 相同时退化为匹配任意单段描述符。 */
+    /**
+     * 在模块描述符列表中按段名精确匹配。
+     *
+     * <p>省略形态的段名已由 {@link ConfigPath#parse(String)} 补为
+     * {@link ConfigPath#DEFAULT_ID}，故此处只需精确匹配，无需再做任何回退猜测。</p>
+     */
     private static ConfigDescriptor findDescriptor(IModule module, ConfigPath cp) {
-        ConfigDescriptor fallback = null;
         for (ConfigDescriptor d : module.getConfigDescriptors()) {
             ConfigPath dp = d.path();
             if (dp.module().equals(cp.module()) && dp.id().equals(cp.id())) {
                 return d;
             }
-            // id 省略形态：cp.id()==module，匹配该模块下唯一段名等于 module 的描述符
-            if (cp.id().equals(cp.module()) && dp.module().equals(cp.module())
-                    && dp.id().equals(cp.module())) {
-                fallback = d;
-            }
         }
-        return fallback;
+        return null;
+    }
+
+    /**
+     * 按描述符级目标串（{@code module:id}，段名为 {@code config} 时可省）取描述符。
+     * 模块或段不存在时返回 null。供 {@code /inf config gui|reload} 使用。
+     */
+    public static ConfigDescriptor findDescriptorByTarget(String target) {
+        ConfigPath cp;
+        try {
+            cp = ConfigPath.parseTarget(target);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+        IModule module = ModuleRegistry.get(cp.module());
+        if (module == null) return null;
+        return findDescriptor(module, cp);
+    }
+
+    /**
+     * 按完整字段路径取其所属描述符；路径非法、模块或段不存在时返回 null。
+     * 供命令层展示类型名 / 取值候选（与 {@link #resolve} 共用同一套匹配规则）。
+     */
+    public static ConfigDescriptor findDescriptorByPath(String fullPath) {
+        try {
+            return resolve(fullPath).descriptor;
+        } catch (ConfigAccessException e) {
+            return null;
+        }
+    }
+
+    /** 取完整路径中的字段点分部分；路径非法时原样返回。 */
+    public static String dotPathOf(String fullPath) {
+        try {
+            return ConfigPath.parse(fullPath).dotPath();
+        } catch (IllegalArgumentException e) {
+            return fullPath;
+        }
+    }
+
+    /** 取完整路径所属的模块；路径非法或模块未登记时返回 null。 */
+    public static IModule findModuleOfPath(String fullPath) {
+        try {
+            return ModuleRegistry.get(ConfigPath.parse(fullPath).module());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     /** 全部配置路径（某模块某段），供补全。 */
@@ -179,6 +223,27 @@ public final class ConfigManager {
                     if (user.toLowerCase(Locale.ROOT).startsWith(lower)) {
                         out.add(user);
                     }
+                }
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 补全：描述符级目标串候选（{@code module:id}，始终含段名）。
+     *
+     * @param prefix      已输入前缀（大小写不敏感）
+     * @param onlyWithGui true 时仅列出含 GUI 回调的描述符（供 {@code config gui}）
+     */
+    public static List<String> suggestTargets(String prefix, boolean onlyWithGui) {
+        List<String> out = new ArrayList<>();
+        String lower = (prefix == null) ? "" : prefix.toLowerCase(Locale.ROOT);
+        for (IModule m : ModuleRegistry.getAll()) {
+            for (ConfigDescriptor d : m.getConfigDescriptors()) {
+                if (onlyWithGui && d.openGui() == null) continue;
+                String target = d.path().targetString();
+                if (target.toLowerCase(Locale.ROOT).startsWith(lower)) {
+                    out.add(target);
                 }
             }
         }

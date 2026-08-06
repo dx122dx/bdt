@@ -1,6 +1,5 @@
 package com.billy65536.infrastructure;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -11,6 +10,7 @@ import com.billy65536.infrastructure.core.config.ConfigManager;
 import com.billy65536.infrastructure.core.module.IModule;
 import com.billy65536.infrastructure.core.module.ModuleCommandRegistrar;
 import com.billy65536.infrastructure.core.module.ModuleRegistry;
+import com.billy65536.infrastructure.core.security.server.ConfigLocker;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -69,7 +69,7 @@ public final class InfrastructureCommands {
         var config = ClientCommandManager.literal("config");
 
         // /inf config get <path:greedyString>
-        // path 形如 module:id/field.path 或 module:field.path（id==module 省略）。
+        // path 形如 module:id/field.path，段名为默认值 config 时可简写为 module:field.path。
         config.then(ClientCommandManager.literal("get")
                 .then(ClientCommandManager.argument("path", StringArgumentType.greedyString())
                         .suggests(CONFIG_PATH_SUGGESTIONS)
@@ -91,30 +91,24 @@ public final class InfrastructureCommands {
                         .executes(ctx -> configReset(ctx.getSource().getClient(),
                                 StringArgumentType.getString(ctx, "path")))));
 
-        // /inf config reload [config_id] —— 重新加载模块配置（含锁定值重放）
-        // config_id 形如 module 或 module:id（缺省重载全部模块）
+        // /inf config reload [module:config_id] —— 重新加载模块配置（含锁定值重放）
+        // 目标形如 module:id，段名为默认值 config 时可简写为 module；缺省重载全部模块
         config.then(ClientCommandManager.literal("reload")
                 .executes(ctx -> configReload(ctx.getSource().getClient(), null))
                 .then(ClientCommandManager.argument("configId", StringArgumentType.greedyString())
-                        .suggests(CONFIG_ID_SUGGESTIONS)
+                        .suggests(CONFIG_TARGET_SUGGESTIONS)
                         .executes(ctx -> configReload(ctx.getSource().getClient(),
                                 StringArgumentType.getString(ctx, "configId")))));
 
-        // /inf config gui [config_id] —— 打开模块配置 GUI
+        // /inf config gui [module:config_id] —— 打开该配置段的 GUI（缺省取首个含 GUI 的配置段）
         config.then(ClientCommandManager.literal("gui")
                 .executes(ctx -> configGui(ctx.getSource().getClient(), null))
                 .then(ClientCommandManager.argument("configId", StringArgumentType.greedyString())
-                        .suggests(CONFIG_ID_SUGGESTIONS)
+                        .suggests(CONFIG_GUI_TARGET_SUGGESTIONS)
                         .executes(ctx -> configGui(ctx.getSource().getClient(),
                                 StringArgumentType.getString(ctx, "configId")))));
 
         return config;
-    }
-
-    /** 模块 id 为无命名空间的纯名称（如 {@code debugger}），原样使用；空值返回 null。 */
-    private static String normalizeModuleId(String raw) {
-        if (raw == null || raw.isEmpty()) return null;
-        return raw;
     }
 
     private static int configGet(net.minecraft.client.MinecraftClient client, String fullPath) {
@@ -127,7 +121,8 @@ public final class InfrastructureCommands {
                     .append(Text.literal(String.valueOf(value)).formatted(Formatting.AQUA))
                     .append(Text.literal("  (type: ").formatted(Formatting.DARK_GRAY))
                     .append(Text.literal(ConfigManager.getTypeName(
-                                    resolveDescriptor(fullPath), dotPathOf(fullPath)))
+                                    ConfigManager.findDescriptorByPath(fullPath),
+                                    ConfigManager.dotPathOf(fullPath)))
                             .formatted(Formatting.DARK_GRAY))
                     .append(Text.literal(", default: ").formatted(Formatting.DARK_GRAY))
                     .append(Text.literal(String.valueOf(def)).formatted(Formatting.DARK_GRAY))
@@ -188,107 +183,82 @@ public final class InfrastructureCommands {
     }
 
     /**
-     * /inf config reload [config_id] —— 重新加载模块配置。
-     * 缺省 reload 全部已登记模块；指定 config_id 时仅 reload 该模块。
-     * 重载后由 ConfigLocker.applyAll 重放锁定强制值（防绕过）。
+     * /inf config reload [module:config_id] —— 重新加载模块配置。
+     *
+     * <p>缺省 reload 全部已登记模块；给定目标时按 {@code module:id} 定位配置段
+     * （段名为默认值 {@code config} 时可省略成 {@code module}），仅重放该段的锁定值。
+     * 重载后由 ConfigLocker.applyAll 重放锁定强制值（防绕过）。</p>
      */
-    private static int configReload(net.minecraft.client.MinecraftClient client, String configId) {
-        if (configId == null || configId.isEmpty()) {
+    private static int configReload(net.minecraft.client.MinecraftClient client, String target) {
+        if (target == null || target.isEmpty()) {
             for (IModule m : ModuleRegistry.getAll()) {
                 m.saveConfig();
             }
-            com.billy65536.infrastructure.core.security.server.ConfigLocker.applyAll(
-                    allDescriptors());
+            ConfigLocker.applyAll(allDescriptors());
             send(client, Text.translatable("billy-inf.msg.config_reloaded_all")
                     .formatted(Formatting.GREEN));
             return 1;
         }
-        IModule module = ModuleRegistry.get(normalizeModuleId(configId));
-        if (module == null) {
-            send(client, Text.translatable("billy-inf.msg.module_not_found", configId)
+        ConfigDescriptor descriptor = ConfigManager.findDescriptorByTarget(target);
+        if (descriptor == null) {
+            send(client, Text.translatable("billy-inf.msg.config_target_not_found", target)
                     .formatted(Formatting.RED));
             return 0;
         }
-        module.saveConfig();
-        com.billy65536.infrastructure.core.security.server.ConfigLocker.applyAll(
-                module.getConfigDescriptors());
-        send(client, Text.translatable("billy-inf.msg.config_reloaded", configId)
-                .formatted(Formatting.GREEN));
+        IModule module = ModuleRegistry.get(descriptor.path().module());
+        if (module != null) module.saveConfig();
+        ConfigLocker.applyAll(List.of(descriptor));
+        send(client, Text.translatable("billy-inf.msg.config_reloaded",
+                        descriptor.path().targetString()).formatted(Formatting.GREEN));
         return 1;
     }
 
     /**
-     * /inf config gui [config_id] —— 打开模块配置 GUI。
-     * 缺省打开第一个含 GUI 回调的模块；指定 config_id 时打开该模块。
+     * /inf config gui [module:config_id] —— 打开指定配置段的 GUI。
+     * 缺省打开第一个含 GUI 回调的配置段；给定目标时按 {@code module:id} 精确定位
+     * （段名为默认值 {@code config} 时可省略成 {@code module}）。
      */
-    private static int configGui(net.minecraft.client.MinecraftClient client, String configId) {
-        ConfigDescriptor target = null;
-        if (configId == null || configId.isEmpty()) {
-            for (IModule m : ModuleRegistry.getAll()) {
-                for (ConfigDescriptor d : m.getConfigDescriptors()) {
-                    if (d.openGui() != null) { target = d; break; }
-                }
-                if (target != null) break;
-            }
-        } else {
-            IModule module = ModuleRegistry.get(normalizeModuleId(configId));
-            if (module == null) {
-                send(client, Text.translatable("billy-inf.msg.module_not_found", configId)
+    private static int configGui(net.minecraft.client.MinecraftClient client, String target) {
+        ConfigDescriptor descriptor;
+        if (target == null || target.isEmpty()) {
+            descriptor = firstDescriptorWithGui();
+            if (descriptor == null) {
+                send(client, Text.translatable("billy-inf.msg.config_no_gui", "*")
                         .formatted(Formatting.RED));
                 return 0;
             }
-            for (ConfigDescriptor d : module.getConfigDescriptors()) {
-                if (d.openGui() != null) { target = d; break; }
+        } else {
+            descriptor = ConfigManager.findDescriptorByTarget(target);
+            if (descriptor == null) {
+                send(client, Text.translatable("billy-inf.msg.config_target_not_found", target)
+                        .formatted(Formatting.RED));
+                return 0;
             }
         }
-        if (target == null) {
-            send(client, Text.translatable("billy-inf.msg.config_no_gui",
-                            configId == null ? "*" : configId).formatted(Formatting.RED));
-            return 0;
-        }
-        if (target.openGuiOnClient()) {
+        if (descriptor.openGuiOnClient()) {
             send(client, Text.translatable("billy-inf.msg.config_gui_opened",
-                            target.path().toString()).formatted(Formatting.GREEN));
+                            descriptor.path().targetString()).formatted(Formatting.GREEN));
             return 1;
         }
         send(client, Text.translatable("billy-inf.msg.config_no_gui",
-                        target.path().toString()).formatted(Formatting.RED));
+                        descriptor.path().targetString()).formatted(Formatting.RED));
         return 0;
     }
 
-    /** 取某完整路径命中的描述符（供类型名展示）。 */
-    private static ConfigDescriptor resolveDescriptor(String fullPath) {
-        try {
-            com.billy65536.infrastructure.core.config.ConfigPath cp =
-                    com.billy65536.infrastructure.core.config.ConfigPath.parse(fullPath);
-            IModule m = ModuleRegistry.get(cp.module());
-            if (m == null) return null;
+    /** 全部模块中第一个含 GUI 回调的配置段；无则返回 null。 */
+    private static ConfigDescriptor firstDescriptorWithGui() {
+        for (IModule m : ModuleRegistry.getAll()) {
             for (ConfigDescriptor d : m.getConfigDescriptors()) {
-                if (d.path().module().equals(cp.module()) && d.path().id().equals(cp.id())) {
-                    return d;
-                }
+                if (d.openGui() != null) return d;
             }
-        } catch (IllegalArgumentException ignored) {}
-        return null;
-    }
-
-    /** 取完整路径中的字段点分路径（供类型名展示）。 */
-    private static String dotPathOf(String fullPath) {
-        try {
-            return com.billy65536.infrastructure.core.config.ConfigPath.parse(fullPath).dotPath();
-        } catch (IllegalArgumentException e) {
-            return fullPath;
         }
+        return null;
     }
 
     /** set/reset 后持久化：按路径定位模块并 saveConfig。 */
     private static void saveModuleOfPath(net.minecraft.client.MinecraftClient client, String fullPath) {
-        try {
-            com.billy65536.infrastructure.core.config.ConfigPath cp =
-                    com.billy65536.infrastructure.core.config.ConfigPath.parse(fullPath);
-            IModule m = ModuleRegistry.get(cp.module());
-            if (m != null) m.saveConfig();
-        } catch (IllegalArgumentException ignored) {}
+        IModule m = ConfigManager.findModuleOfPath(fullPath);
+        if (m != null) m.saveConfig();
     }
 
     /** 全部已登记模块的全部描述符（供 reload all）。 */
@@ -303,9 +273,15 @@ public final class InfrastructureCommands {
     /**
      * 配置路径补全（get / reset / set 的 key 部分）：基于已输入前缀，
      * 用 {@link CliCompletion} 的层级模式向下钻取一层，支持含 {@code .} 的嵌套路径。
+     *
+     * <p>候选串取自 {@code ConfigPath.toUserString()}，即默认段名 {@code config}
+     * <b>已省略</b>的最简形态（{@code module:field.path}），与
+     * {@code ConfigPath.parse} 的省略规则严格对称。段名非 {@code config} 的模块
+     * 给出完整形态 {@code module:id/field.path}，故分隔符集合需含 {@code /}。</p>
      */
     private static final SuggestionProvider<FabricClientCommandSource> CONFIG_PATH_SUGGESTIONS =
             CliCompletion.builder()
+                    .separators(".:/")
                     .keySource(ctx -> ConfigManager.suggestPaths(prefixOf(ctx, "path")))
                     .build();
 
@@ -319,28 +295,39 @@ public final class InfrastructureCommands {
      */
     private static final SuggestionProvider<FabricClientCommandSource> CONFIG_ASSIGNMENT_SUGGESTIONS =
             CliCompletion.builder()
-                    .separators(".:")
+                    .separators(".:/")
                     .assignment(true)
                     .multiple(true)
                     .keySource(ctx -> ConfigManager.suggestPaths(prefixOf(ctx, "assignments")))
                     .valueProvider((ctx, key) -> {
-                        ConfigDescriptor d = resolveDescriptor(key);
+                        ConfigDescriptor d = ConfigManager.findDescriptorByPath(key);
                         if (d == null) return List.of();
-                        return ConfigManager.suggestValues(d, dotPathOf(key));
+                        return ConfigManager.suggestValues(d, ConfigManager.dotPathOf(key));
                     })
                     .build();
 
-    /** config_id 补全（reload / gui 的 {@code <configId>} 参数）：列出全部模块 id。 */
-    private static final SuggestionProvider<FabricClientCommandSource> CONFIG_ID_SUGGESTIONS =
-            (ctx, builder) -> {
-                String remaining = builder.getRemaining().toLowerCase(Locale.ROOT);
-                for (IModule m : ModuleRegistry.getAll()) {
-                    if (m.getId().toLowerCase(Locale.ROOT).startsWith(remaining)) {
-                        builder.suggest(m.getId());
-                    }
-                }
-                return builder.buildFuture();
-            };
+    /**
+     * 配置段目标补全（reload 的 {@code <configId>} 参数）：列出全部配置段的
+     * {@code module:config_id}（始终含段名，与 {@code /inf info} 的展示格式一致）。
+     */
+    private static final SuggestionProvider<FabricClientCommandSource> CONFIG_TARGET_SUGGESTIONS =
+            targetSuggestions(false);
+
+    /** 配置段目标补全（gui 的 {@code <configId>} 参数）：仅列出含 GUI 回调的配置段。 */
+    private static final SuggestionProvider<FabricClientCommandSource> CONFIG_GUI_TARGET_SUGGESTIONS =
+            targetSuggestions(true);
+
+    /** 构造 {@code module:config_id} 形式的目标补全器。 */
+    private static SuggestionProvider<FabricClientCommandSource> targetSuggestions(boolean onlyWithGui) {
+        return (ctx, builder) -> {
+            // 大小写归一固定 Locale.ROOT，避免 tr_TR 下 'I' 归一异常导致补全静默失效
+            String remaining = builder.getRemaining().toLowerCase(Locale.ROOT);
+            for (String target : ConfigManager.suggestTargets(remaining, onlyWithGui)) {
+                builder.suggest(target);
+            }
+            return builder.buildFuture();
+        };
+    }
 
     /** 从命令上下文取某个 greedyString 参数的已输入前缀（用于补全）。 */
     private static String prefixOf(CommandContext<FabricClientCommandSource> ctx, String arg) {
@@ -409,8 +396,8 @@ public final class InfrastructureCommands {
     }
 
     private static int showModuleInfo(net.minecraft.client.MinecraftClient client, String rawModuleId) {
-        String moduleId = normalizeModuleId(rawModuleId);
-        IModule module = (moduleId == null) ? null : ModuleRegistry.get(moduleId);
+        IModule module = (rawModuleId == null || rawModuleId.isEmpty())
+                ? null : ModuleRegistry.get(rawModuleId);
         if (module == null) {
             send(client, Text.translatable("billy-inf.msg.module_not_found",
                             rawModuleId == null ? "?" : rawModuleId)
@@ -452,25 +439,21 @@ public final class InfrastructureCommands {
         out = out.append(Text.literal("  ")
                 .append(Text.translatable("billy-inf.msg.info_contrib_configs").formatted(Formatting.YELLOW)))
                 .append("\n");
+        // 每个配置段一行：- <module>:<config_id> (N 项)。
+        // 逐条列出全部字段路径会在字段多时刷屏；字段级路径改由 /inf config 的补全给出。
         List<ConfigDescriptor> descriptors = module.getConfigDescriptors();
         if (descriptors.isEmpty()) {
             out = out.append(Text.literal("    ")
                     .append(Text.translatable("billy-inf.msg.list_empty").formatted(Formatting.DARK_GRAY)))
                     .append("\n");
         } else {
-            boolean any = false;
             for (ConfigDescriptor d : descriptors) {
-                for (String p : ConfigManager.listPaths(d)) {
-                    any = true;
-                    String full = com.billy65536.infrastructure.core.config.ConfigPath
-                            .of(d.path().module(), d.path().id(), p).toUserString();
-                    out = out.append(Text.literal("    - " + full)
-                            .formatted(Formatting.GRAY)).append("\n");
-                }
-            }
-            if (!any) {
-                out = out.append(Text.literal("    ")
-                        .append(Text.translatable("billy-inf.msg.list_empty").formatted(Formatting.DARK_GRAY)))
+                int count = ConfigManager.listPaths(d).size();
+                out = out.append(Text.literal("    - ")
+                                .append(Text.literal(d.path().targetString()).formatted(Formatting.AQUA))
+                                .append(Text.literal(" "))
+                                .append(Text.translatable("billy-inf.msg.info_config_count", count)
+                                        .formatted(Formatting.DARK_GRAY)))
                         .append("\n");
             }
         }

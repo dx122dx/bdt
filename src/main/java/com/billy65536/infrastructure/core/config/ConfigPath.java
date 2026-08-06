@@ -16,19 +16,28 @@ import java.util.Objects;
  *       对应配置对象图内的叶子字段。</li>
  * </ul>
  *
- * <p><b>省略规则</b>：当 {@code id} 与 {@code module} 相同时，允许省略，即
- * {@code chunkscanner:chunkscanner/x} 等价简写为 {@code chunkscanner:x}。
- * 这是为「单一配置对象的模块」省去冗余段名——解析时若分号后不含 {@code /}，
- * 即判定为省略形态，把整段当作 {@code path}，{@code id} 取 {@code module}。</p>
+ * <p><b>省略规则（统一约定）</b>：当且仅当 {@code id} 等于默认段名 {@link #DEFAULT_ID}
+ * （{@code "config"}）时可省略，即 {@code chunkscanner:config/x} 等价简写为
+ * {@code chunkscanner:x}。解析时若冒号后不含 {@code /}，即判定为省略形态，
+ * 把整段当作 {@code path}，{@code id} 补为 {@code config}；
+ * 反向的 {@link #toUserString()} 亦按同一规则省略段名，
+ * 使「命令输入」与「补全输出」两侧行为完全一致。</p>
+ *
+ * <p>注意：省略形态<b>不再</b>与 {@code id == module} 挂钩。历史版本以
+ * {@code module:module/x} 为省略基准，导致「模块段名叫 config 时无法省略、
+ * 而补全给出的却是省略形态」的不一致；现统一以 {@code config} 为唯一可省略段名。</p>
  *
  * <p>本类为不可变 record，仅做纯字符串解析，不持有任何配置实例。
  * 模块 id 内的冒号会导致切分错位，沿用 {@code IModule} 的约束（id 不可含冒号）。</p>
  *
  * @param module 模块 id（无命名空间纯名）
- * @param id     模块自定义段名；省略形态下等于 module
- * @param path   点分配置字段路径（不会为空，至少含一段）
+ * @param id     模块自定义段名；省略形态下为 {@link #DEFAULT_ID}
+ * @param path   点分配置字段路径（可为空数组，表示描述符级路径）
  */
 public record ConfigPath(String module, String id, String[] path) {
+
+    /** 默认段名。用户路径中省略段名时补为该值；反向输出时该值被省略。 */
+    public static final String DEFAULT_ID = "config";
 
     /** 完整路径分隔符：模块与段之间用前缀 {@code <module>:<id>}。 */
     private static final String PREFIX_SEP = ":";
@@ -41,7 +50,7 @@ public record ConfigPath(String module, String id, String[] path) {
      * <p>支持两种形态：</p>
      * <ul>
      *   <li>完整：{@code module:id/dot.path}（含 {@code /}）；</li>
-     *   <li>省略：{@code module:dot.path}（无 {@code /}，id 取 module）。</li>
+     *   <li>省略：{@code module:dot.path}（无 {@code /}，id 补为 {@link #DEFAULT_ID}）。</li>
      * </ul>
      *
      * <p>模块与段之间必须含前缀分隔符 {@code :}；缺失或段为空视为非法，抛出
@@ -70,8 +79,8 @@ public record ConfigPath(String module, String id, String[] path) {
         String id;
         String dotPath;
         if (segIdx < 0) {
-            // 省略形态：整段当作 path，id 取 module
-            id = module;
+            // 省略形态：整段当作 path，段名补为默认值 config
+            id = DEFAULT_ID;
             dotPath = rest;
         } else {
             id = rest.substring(0, segIdx);
@@ -89,6 +98,35 @@ public record ConfigPath(String module, String id, String[] path) {
                     "Config path '" + raw + "' has empty segment in field path");
         }
         return new ConfigPath(module, id, path);
+    }
+
+    /**
+     * 解析<b>描述符级</b>目标串（无字段路径），形如 {@code module:id} 或省略段名的 {@code module}。
+     *
+     * <p>供 {@code /inf config gui|reload <target>} 使用：段名省略时补为
+     * {@link #DEFAULT_ID}，与 {@link #parse(String)} 的省略规则一致。</p>
+     *
+     * @param raw 形如 {@code chunkscanner:config} 或 {@code chunkscanner}
+     * @return path 为空数组的 ConfigPath
+     * @throws IllegalArgumentException 串为空、模块名为空或段名为空
+     */
+    public static ConfigPath parseTarget(String raw) {
+        if (raw == null || raw.isEmpty()) {
+            throw new IllegalArgumentException("Config target is empty");
+        }
+        int prefixIdx = raw.indexOf(PREFIX_SEP);
+        if (prefixIdx < 0) {
+            return new ConfigPath(raw, DEFAULT_ID, new String[0]);
+        }
+        String module = raw.substring(0, prefixIdx);
+        String id = raw.substring(prefixIdx + 1);
+        if (module.isEmpty()) {
+            throw new IllegalArgumentException("Config target '" + raw + "' has empty module");
+        }
+        if (id.isEmpty()) {
+            throw new IllegalArgumentException("Config target '" + raw + "' has empty segment id");
+        }
+        return new ConfigPath(module, id, new String[0]);
     }
 
     /**
@@ -113,26 +151,35 @@ public record ConfigPath(String module, String id, String[] path) {
     }
 
     /**
+     * 描述符级标识串 {@code <module>:<id>}（始终含段名，不做省略）。
+     * 用于 {@code /inf info} 的配置贡献展示与 {@code /inf config gui|reload} 的补全。
+     */
+    public String targetString() {
+        return module + PREFIX_SEP + id;
+    }
+
+    /**
      * 还原为完整用户可见路径（含段名，不做省略简化）。
      * 即 {@code <module>:<id>/<dot.path>}；无字段时退化为 {@code <module>:<id>}。
      */
     @Override
     public String toString() {
         if (path.length == 0) {
-            return module + PREFIX_SEP + id;
+            return targetString();
         }
-        return module + PREFIX_SEP + id + SEG_SEP + dotPath();
+        return targetString() + SEG_SEP + dotPath();
     }
 
     /**
-     * 还原为命令行最简形态：当 {@code id == module} 时省略段名
-     * （{@code module:dot.path}）；无字段时退化为 {@code module}（id==module）或 {@code module:id}。
+     * 还原为命令行最简形态：段名为默认值 {@link #DEFAULT_ID} 时省略
+     * （{@code module:dot.path}），否则保留完整形态。
+     * 无字段路径时退化为描述符级标识 {@code module:id}（见 {@link #targetString()}）。
      */
     public String toUserString() {
         if (path.length == 0) {
-            return Objects.equals(id, module) ? module : module + PREFIX_SEP + id;
+            return targetString();
         }
-        if (Objects.equals(id, module)) {
+        if (Objects.equals(id, DEFAULT_ID)) {
             return module + PREFIX_SEP + dotPath();
         }
         return toString();

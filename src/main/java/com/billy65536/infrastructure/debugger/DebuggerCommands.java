@@ -86,7 +86,7 @@ public final class DebuggerCommands {
                     .multiple(true)
                     .positional((ctx, completed) -> {
                         Identifier rawId = ctx.getArgument("id", Identifier.class);
-                        IDebugAction action = ActionRegistry.get(normalizeIdentifier(rawId));
+                        IDebugAction action = ActionRegistry.get(normalizeActionId(rawId));
                         if (action == null) return List.of();
                         return action.suggest(ctx.getSource().getClient(), completed);
                     })
@@ -171,7 +171,7 @@ public final class DebuggerCommands {
 
     /** 执行指定 id 的调试动作。 */
     private static int runAction(MinecraftClient client, Identifier rawId, String rawArgs) {
-        Identifier id = normalizeIdentifier(rawId);
+        Identifier id = normalizeActionId(rawId);
         IDebugAction action = ActionRegistry.get(id);
         if (action == null) {
             sendMsg(client, Text.translatable("billy-inf.msg.action_not_found", id.toString())
@@ -206,7 +206,7 @@ public final class DebuggerCommands {
 
     /** 显示指定调试动作的元信息（id / 名称 / 描述）。 */
     private static int showAction(MinecraftClient client, Identifier rawId) {
-        Identifier id = normalizeIdentifier(rawId);
+        Identifier id = normalizeActionId(rawId);
         IDebugAction action = ActionRegistry.get(id);
         if (action == null) {
             sendMsg(client, Text.translatable("billy-inf.msg.action_not_found", id.toString())
@@ -229,7 +229,7 @@ public final class DebuggerCommands {
 
     /** 显示指定特性的当前启用状态。 */
     private static int showFeature(MinecraftClient client, Identifier rawId) {
-        Identifier id = normalizeIdentifier(rawId);
+        Identifier id = normalizeFeatureId(rawId);
         IDebugFeature feature = FeatureRegistry.get(id);
         if (feature == null) {
             sendMsg(client, Text.translatable("billy-inf.msg.feature_not_found", id.toString())
@@ -250,7 +250,7 @@ public final class DebuggerCommands {
 
     /** 启用或禁用指定特性。 */
     private static int setFeature(MinecraftClient client, Identifier rawId, boolean value) {
-        Identifier id = normalizeIdentifier(rawId);
+        Identifier id = normalizeFeatureId(rawId);
         if (FeatureRegistry.get(id) == null) {
             sendMsg(client, Text.translatable("billy-inf.msg.feature_not_found", id.toString())
                     .formatted(Formatting.RED));
@@ -341,18 +341,54 @@ public final class DebuggerCommands {
     }
 
     /**
-     * 将 {@link IdentifierArgumentType} 解析出的 {@link Identifier} 归一化到本模组的
-     * {@code billy-inf} 命名空间。
+     * 归一化 {@link IdentifierArgumentType} 解析出的动作 id。
      *
-     * <p>{@link IdentifierArgumentType} 对裸名（如 {@code cs.foo}）默认补全为
-     * {@code minecraft} 命名空间，与我们的 id 约定不符；此处把命名空间为
-     * {@code minecraft} 或缺失的裸名归一到 {@code billy-inf}，
-     * 已显式带 {@code billy-inf:} 的则原样保留。</p>
+     * @see #normalizeIdentifier(Identifier, Supplier)
      */
-    private static Identifier normalizeIdentifier(Identifier id) {
+    private static Identifier normalizeActionId(Identifier id) {
+        return normalizeIdentifier(id,
+                () -> ActionRegistry.getAll().stream().map(IDebugAction::getId).toList());
+    }
+
+    /**
+     * 归一化 {@link IdentifierArgumentType} 解析出的特性 id。
+     *
+     * @see #normalizeIdentifier(Identifier, Supplier)
+     */
+    private static Identifier normalizeFeatureId(Identifier id) {
+        return normalizeIdentifier(id,
+                () -> FeatureRegistry.getAll().stream().map(IDebugFeature::getId).toList());
+    }
+
+    /**
+     * 归一化 {@link IdentifierArgumentType} 解析出的 {@link Identifier}。
+     *
+     * <p>调试动作 / 特性由各上层 mod 以<b>自身</b>命名空间注册（如
+     * {@code csdbg:cs.configuration-locker.disable-apply-all}），因此
+     * <b>显式带命名空间的输入必须原样保留</b>——早期版本一律改写成
+     * {@code billy-inf} 命名空间，导致所有非本模组注册项永远查不到。</p>
+     *
+     * <p>仅当输入是裸名时才需要推断命名空间：{@link IdentifierArgumentType} 会把裸名
+     * （如 {@code cs.foo}）补成 {@code minecraft} 命名空间。此时在注册表中按 path 回查，
+     * 命中唯一项则用其真实命名空间；无命中或有歧义时退回本模组命名空间。</p>
+     *
+     * @param id       已解析的 id，可为 null
+     * @param idSource 注册表内全部 id 的供给器，延迟求值以反映运行时注册变化
+     */
+    private static Identifier normalizeIdentifier(
+            Identifier id, Supplier<Collection<? extends Identifier>> idSource) {
         if (id == null) return InfrastructureMod.id("unknown");
-        if (InfrastructureMod.MOD_ID.equals(id.getNamespace())) return id;
-        // 裸名（minecraft 默认命名空间）或未匹配其它命名空间时，归一到本模组命名空间
-        return new Identifier(InfrastructureMod.MOD_ID, id.getPath());
+        // 非 minecraft 命名空间 = 用户显式书写，原样尊重
+        if (!"minecraft".equals(id.getNamespace())) return id;
+        // 裸名：在注册表中按 path 回查真实命名空间
+        Identifier matched = null;
+        for (Identifier known : idSource.get()) {
+            if (known.getPath().equals(id.getPath())) {
+                // 多个命名空间下同名，无法判定，退回本模组命名空间由调用方报「未找到」
+                if (matched != null) return new Identifier(InfrastructureMod.MOD_ID, id.getPath());
+                matched = known;
+            }
+        }
+        return (matched != null) ? matched : new Identifier(InfrastructureMod.MOD_ID, id.getPath());
     }
 }

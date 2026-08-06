@@ -27,7 +27,8 @@
     "billy-inf.msg.info_version_label": "Version: ",
     "billy-inf.msg.info_desc_label": "Description: ",
     "billy-inf.msg.info_contrib_commands": "Commands contributed:",
-    "billy-inf.msg.info_contrib_configs": "Config paths:",
+    "billy-inf.msg.info_contrib_configs": "Configs contributed:",
+    "billy-inf.msg.info_config_count": "(%s entries)",
     "billy-inf.msg.module_debugger_name": "Debugger",
     "billy-inf.msg.module_debugger_desc": "Built-in debug module: run debug actions, toggle debug features, and inspect them via the /inf dbg command tree.",
 
@@ -41,8 +42,9 @@
     "billy-inf.msg.config_set_usage": "Usage: /inf config set <module:path=value> [module:path=value ...]",
     "billy-inf.msg.config_set_need_value": "Config %s is missing a =value, use module:path=value form",
     "billy-inf.msg.config_reloaded_all": "All module configs reloaded (server locks reapplied).",
-    "billy-inf.msg.config_reloaded": "Config reloaded for module '%s' (server locks reapplied).",
-    "billy-inf.msg.config_no_gui": "Module '%s' has no GUI available.",
+    "billy-inf.msg.config_reloaded": "Config segment '%s' reloaded (server locks reapplied).",
+    "billy-inf.msg.config_target_not_found": "Config segment not found: %s (expected 'module:config_id'; 'config' may be omitted)",
+    "billy-inf.msg.config_no_gui": "Config segment '%s' has no GUI available.",
     "billy-inf.msg.config_gui_opened": "Opened config GUI for %s.",
 
     "billy-inf.gui.title": "Billy's Mod infrastructure",

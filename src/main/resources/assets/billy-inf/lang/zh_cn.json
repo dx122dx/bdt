@@ -27,7 +27,8 @@
     "billy-inf.msg.info_version_label": "版本：",
     "billy-inf.msg.info_desc_label": "描述：",
     "billy-inf.msg.info_contrib_commands": "贡献的命令：",
-    "billy-inf.msg.info_contrib_configs": "配置路径：",
+    "billy-inf.msg.info_contrib_configs": "贡献的配置：",
+    "billy-inf.msg.info_config_count": "(%s 项)",
     "billy-inf.msg.module_debugger_name": "调试器",
     "billy-inf.msg.module_debugger_desc": "内置调试模块：执行调试动作、开关调试特性，并通过 /inf dbg 命令树查看它们。",
 
@@ -41,8 +42,9 @@
     "billy-inf.msg.config_set_usage": "用法：/inf config set <模块:路径=值> [模块:路径=值 ...]",
     "billy-inf.msg.config_set_need_value": "配置 %s 缺少 = 值，请使用 模块:路径=值 的形式",
     "billy-inf.msg.config_reloaded_all": "已重载全部模块配置（已重放服务器锁定值）。",
-    "billy-inf.msg.config_reloaded": "已重载模块 '%s' 的配置（已重放服务器锁定值）。",
-    "billy-inf.msg.config_no_gui": "模块 '%s' 无可用的配置界面。",
+    "billy-inf.msg.config_reloaded": "已重载配置段 '%s'（已重放服务器锁定值）。",
+    "billy-inf.msg.config_target_not_found": "未找到配置段：%s（形如 模块:配置段，配置段为 config 时可省略）",
+    "billy-inf.msg.config_no_gui": "配置段 '%s' 无可用的配置界面。",
     "billy-inf.msg.config_gui_opened": "已打开 %s 的配置界面。",
 
     "billy-inf.gui.title": "Billy's Mod infrastructure",
