@@ -9,7 +9,7 @@
 - 包名：`com.billy65536.infrastructure`
 - 主类：`InfrastructureMod`
 - 作者：billy65536
-- 仓库：<https://github.com/dx122dx/billy-inf>
+- 仓库：<https://github.com/dx122dx/mod-infrastructure>
 - 许可：**AGPL-3.0-only**
 - 环境：client-only｜Java 17｜MC 1.20.1
 
@@ -107,6 +107,7 @@
   - 显式：`ModuleRegistry.register(module)`；
   - 自动：`ModuleRegistry.discover()` 基于 Java SPI 扫描 `META-INF/services/com.billy65536.infrastructure.core.module.IModule`，发现全部实现（当前仅 `DebuggerModule`）。
   - 任一模块初始化失败仅记录并跳过，不阻断其它模块。
+- **发现时机**：`discover()` 挂在 Fabric 的 `CLIENT_STARTED` 事件上，即**所有模组的客户端入口点执行完毕之后**才触发。Fabric 按依赖拓扑序调用入口点，billy-inf 必然早于依赖它的模组；若在入口点内直接发现，下游模块会先于其宿主模组自身初始化而读到未就绪状态。因此模块的 `onInitializeModule()` 可以安全依赖宿主模组的初始化结果，但不应在其中做需要更早时机的注册（资源包监听器、注册表条目等）。
 - **`ModuleCommandRegistrar`**：在模块登记时统一挂载其命令子树到 `/inf` 根，根命令构建时只消费登记结果，不自行遍历模块。
 
 新增一个模块只需：实现 `IModule` + 在 services 文件追加一行，**无需改动任何启动代码**。

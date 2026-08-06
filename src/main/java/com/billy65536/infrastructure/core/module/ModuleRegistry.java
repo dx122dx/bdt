@@ -28,8 +28,11 @@ import com.billy65536.infrastructure.InfrastructureMod;
  * <p>沿用 {@code ActionRegistry} / {@link com.billy65536.infrastructure.debugger.core.feature.FeatureRegistry}
  * 的静态单例 + {@link LinkedHashMap} 模式；注册顺序决定 {@code /inf info} 列举与命令挂载的排列顺序。</p>
  *
- * <p>模块必须在 {@code InfrastructureCommands.register()} 之前完成登记
- * （初始化顺序由 {@link #discover()} 在命令注册前统一触发）。</p>
+ * <p>登记时机：{@link #discover()} 由模组主类挂在 Fabric 的 {@code CLIENT_STARTED}
+ * 生命周期事件上，即<b>所有模组的客户端入口点执行完毕之后</b>才触发，
+ * 使下游模块能安全依赖其宿主模组的初始化结果。命令树在
+ * {@code ClientCommandRegistrationCallback} 触发时才构建（晚于 {@code CLIENT_STARTED}），
+ * 因此命令注册不再要求模块提前登记。</p>
  */
 public final class ModuleRegistry {
 
@@ -81,6 +84,12 @@ public final class ModuleRegistry {
      * <p>扫描 {@code META-INF/services/com.billy65536.infrastructure.core.module.IModule} 中声明的实现类，
      * 逐个实例化并登记。新增模块只需提供实现类并在该 services 文件中追加一行，
      * 即可被自动纳入——启动代码无需任何改动。本方法幂等，仅执行一次。</p>
+     *
+     * <p><b>调用时机</b>：由 {@code InfrastructureMod} 挂到 {@code CLIENT_STARTED}
+     * 事件上，晚于全部模组的 {@code client} 入口点。模块的
+     * {@link IModule#onInitializeModule()} 因此可以读取宿主模组初始化后的状态；
+     * 反之，需要更早时机的注册（资源包监听器、注册表条目等）不应放在模块初始化里，
+     * 应由宿主模组自己在入口点完成，或改用 {@link #register(IModule)} 显式提前登记。</p>
      *
      * <p>任一模块实现加载失败（如缺失依赖）仅记录并跳过，不阻断其它模块的登记。</p>
      */

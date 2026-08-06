@@ -9,7 +9,7 @@ It does not bind to any specific "target mod". Instead, it provides a **module f
 - Package: `com.billy65536.infrastructure`
 - Main class: `InfrastructureMod`
 - Author: billy65536
-- Repository: <https://github.com/dx122dx/billy-inf>
+- Repository: <https://github.com/dx122dx/mod-infrastructure>
 - License: **AGPL-3.0-only**
 - Environment: client-only | Java 17 | MC 1.20.1
 
@@ -107,6 +107,7 @@ The core of `billy-inf` is a lightweight module framework in the `core` package:
   - Explicit: `ModuleRegistry.register(module)`;
   - Automatic: `ModuleRegistry.discover()` scans `META-INF/services/com.billy65536.infrastructure.core.module.IModule` via Java SPI (currently only `DebuggerModule`).
   - If any module fails to initialize, it is logged and skipped — other modules are unaffected.
+- **Discovery timing**: `discover()` is hooked to Fabric's `CLIENT_STARTED` event, i.e. it runs **after every mod's client entrypoint has finished**. Fabric invokes entrypoints in dependency order, so billy-inf always runs before the mods that depend on it; discovering inside the entrypoint would initialize a downstream module before its own host mod is ready. As a result `onInitializeModule()` may safely rely on the host mod's initialized state, but must not perform registrations that require an earlier phase (resource reload listeners, registry entries, etc.).
 - **`ModuleCommandRegistrar`**: mounts a module's command subtree to the `/inf` root at registration time; the root command only consumes the registration results and never iterates modules itself.
 
 Adding a module only requires: implement `IModule` + append one line to the services file — **no startup-code changes needed**.

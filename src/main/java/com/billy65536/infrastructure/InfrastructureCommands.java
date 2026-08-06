@@ -37,6 +37,11 @@ import net.minecraft.util.Formatting;
  *
  * <p>模块命令节点由 {@link ModuleRegistry#register(IModule)} 在模块登记时统一挂入登记器，
  * 本类仅消费登记结果，不自行遍历模块。</p>
+ *
+ * <p>{@link #register()} 可以在模块发现之前调用：命令树在
+ * {@link ClientCommandRegistrationCallback} 触发时（进入世界）才构建，届时模块已由
+ * {@code CLIENT_STARTED} 完成发现；回调内仍会调用一次幂等的
+ * {@link ModuleRegistry#discover()} 作为兜底。</p>
  */
 public final class InfrastructureCommands {
 
@@ -44,6 +49,9 @@ public final class InfrastructureCommands {
 
     public static void register() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
+            // 兜底：模块发现正常在 CLIENT_STARTED 完成；若该事件因故未触发
+            // （集成测试 / 非常规启动流程），此处补一次幂等发现，保证模块命令不缺失
+            ModuleRegistry.discover();
             LiteralArgumentBuilder<FabricClientCommandSource> root = ClientCommandManager.literal("inf");
             root.then(buildConfigCommand());
             root.then(buildInfoCommand());
