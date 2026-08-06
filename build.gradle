@@ -12,10 +12,16 @@ ext {
     loom_resources_base = 'https://bmclapi2.bangbang93.com/assets/'
 }
 
+// CI（GitHub Actions）环境可直连 Mojang，自动跳过 BMCLAPI 镜像，
+// 避免镜像 SHA1 漂移导致 CI 构建失败；仅本地无法直连时使用镜像。
+def useBmclapi = System.getenv("CI") == null
+
 loom {
-    // 使用 BMCLAPI 直接下载版本 JSON，绕过 version manifest
+    // 使用 BMCLAPI 直接下载版本 JSON，绕过 version manifest（仅本地环境）
     // 注意：SHA1 前缀可能随 BMCLAPI 更新而变化，若构建失败请检查此 URL
-    customMinecraftManifest = 'https://bmclapi2.bangbang93.com/v1/packages/a540b5c5ded34de717f3acc10c9d3704b66670d8/1.20.1.json'
+    if (useBmclapi) {
+        customMinecraftManifest = 'https://bmclapi2.bangbang93.com/v1/packages/a540b5c5ded34de717f3acc10c9d3704b66670d8/1.20.1.json'
+    }
 }
 
 repositories {
@@ -88,9 +94,64 @@ java {
 	// if it is present.
 	// If you remove this line, sources will not be generated.
 	withSourcesJar()
+	withJavadocJar()
 
 	sourceCompatibility = JavaVersion.VERSION_17
 	targetCompatibility = JavaVersion.VERSION_17
+}
+
+// Maven Central 快照发布要求禁用 Gradle Module Metadata，
+// 避免 .module 文件泄露 flatDir 解析出的本地依赖坐标（见 chunkscanner 同款约束）。
+tasks.withType(GenerateModuleMetadata).configureEach {
+	enabled = false
+}
+
+// 填充 maven-publish 配置：坐标与快照仓库全部由外部属性/环境变量驱动，
+// 属性缺省时回落到现有 group/version，本地 ./gradlew build 行为完全不变。
+publishing {
+	publications {
+		mavenJava(MavenPublication) {
+			from components.java
+			// 发布坐标覆盖契约：CI 传 -PpublishGroup / -PpublishVersion，缺省回落到现有值
+			groupId    = findProperty('publishGroup')   ?: project.group
+			artifactId = project.archives_base_name
+			version    = findProperty('publishVersion') ?: project.version
+
+			pom {
+				name        = 'Billy\'s Mod infrastructure'
+				description = 'A general-purpose client-side infrastructure mod for Fabric: module framework, config locking and unified core.config management.'
+				url         = 'https://github.com/dx122dx/mod-infrastructure'
+				licenses {
+					license {
+						name = 'GNU Affero General Public License v3.0 only'
+						url  = 'https://www.gnu.org/licenses/agpl-3.0.txt'
+					}
+				}
+				developers {
+					developer {
+						id    = 'billy65536'
+						name  = 'billy65536'
+					}
+				}
+				scm {
+					connection      = 'scm:git:git://github.com/dx122dx/mod-infrastructure.git'
+					developerConnection = 'scm:git:ssh://github.com/dx122dx/mod-infrastructure.git'
+					url             = 'https://github.com/dx122dx/mod-infrastructure'
+				}
+			}
+		}
+	}
+
+	repositories {
+		maven {
+			name = 'centralSnapshots'
+			url  = 'https://central.sonatype.com/repository/maven-snapshots/'
+			credentials {
+				username = System.getenv('CENTRAL_TOKEN_USERNAME')
+				password = System.getenv('CENTRAL_TOKEN_PASSWORD')
+			}
+		}
+	}
 }
 
 jar {
@@ -99,22 +160,5 @@ jar {
 
 	from("LICENSE") {
 		rename { "${it}_$projectName"}
-	}
-}
-
-// configure the maven publication
-publishing {
-	publications {
-		create("mavenJava", MavenPublication) {
-			from components.java
-		}
-	}
-
-	// See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
-	repositories {
-		// Add repositories to publish to here.
-		// Notice: This block does NOT have the same function as the block in the top level.
-		// The repositories here will be used for publishing your artifact, not for
-		// retrieving dependencies.
 	}
 }
