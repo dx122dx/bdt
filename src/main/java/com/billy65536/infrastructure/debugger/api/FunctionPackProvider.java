@@ -19,7 +19,7 @@ package com.billy65536.infrastructure.debugger.api;
  * }</pre>
  */
 @FunctionalInterface
-public interface FunctionPackageContributor {
+public interface FunctionPackProvider {
 
     /** 向调试框架贡献功能包。 */
     void contribute(Contributor contributor);

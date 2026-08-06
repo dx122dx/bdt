@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.billy65536.infrastructure.InfrastructureMod;
-import com.billy65536.infrastructure.debugger.api.FunctionPackageContributor;
+import com.billy65536.infrastructure.debugger.api.FunctionPackProvider;
 
 import net.fabricmc.loader.api.entrypoint.EntrypointContainer;
 import net.fabricmc.loader.api.FabricLoader;
@@ -30,10 +30,10 @@ import net.fabricmc.loader.api.FabricLoader;
  *
  * <p>内置调试包由<b>外部 mod</b> 通过 infrastructure 的调试框架扩展点注入：</p>
  * <ol>
- *   <li>外部 mod 实现 {@link FunctionPackageContributor} 接口；</li>
+ *   <li>外部 mod 实现 {@link FunctionPackProvider} 接口；</li>
  *   <li>在其 {@code fabric.mod.json} 注册自定义 entrypoint {@code "infrastructure:debugger"}，
  *       值为该实现类的全限定名；</li>
- *   <li>在 {@link FunctionPackageContributor#contribute} 中调用
+ *   <li>在 {@link FunctionPackProvider#contribute} 中调用
  *       {@code contributor.add(requiredModId, displayName, XxxFunctions::register)}。</li>
  * </ol>
  *
@@ -61,7 +61,7 @@ public final class PackManager {
      * 注册全部内置包：先合并框架内置包与外部 mod 注入的包，再逐包判定目标模组是否加载。
      *
      * <p>外部 mod 通过 {@code "infrastructure:debugger"} entrypoint 贡献其内置包，
-     * 由 {@link FunctionPackageContributor} 收集。注册过程中的任何 {@link Throwable}
+     * 由 {@link FunctionPackProvider} 收集。注册过程中的任何 {@link Throwable}
      * （含 {@link NoClassDefFoundError}、{@link LinkageError} 等类加载期错误）都会被
      * 捕获并记录，绝不阻断模组初始化——调试工具的可用性优先级低于宿主游戏的启动成功率。</p>
      */
@@ -70,8 +70,8 @@ public final class PackManager {
         List<FunctionPack> all = new ArrayList<>(PACKS);
 
         // 收集外部 mod 通过 "infrastructure:debugger" entrypoint 注入的内置包
-        for (EntrypointContainer<FunctionPackageContributor> container
-                : loader.getEntrypointContainers("infrastructure:debugger", FunctionPackageContributor.class)) {
+        for (EntrypointContainer<FunctionPackProvider> container
+                : loader.getEntrypointContainers("infrastructure:debugger", FunctionPackProvider.class)) {
             try {
                 container.getEntrypoint().contribute((requiredModId, displayName, entry) ->
                         all.add(new FunctionPack(requiredModId, displayName, entry)));
