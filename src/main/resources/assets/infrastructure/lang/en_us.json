@@ -39,6 +39,7 @@
     "infrastructure.msg.config_set": "Set %s: %s → %s",
     "infrastructure.msg.config_reset": "Reset %s: %s → %s",
     "infrastructure.msg.config_error": "Config %s error: %s",
+    "infrastructure.msg.config_locked": "Config %s is locked by security policy and cannot be modified (policy: %s, enforcer: %s)",
     "infrastructure.msg.config_set_usage": "Usage: /inf config set <module:path=value> [module:path=value ...]",
     "infrastructure.msg.config_set_need_value": "Config %s is missing a =value, use module:path=value form",
     "infrastructure.msg.config_reloaded_all": "All module configs reloaded (server locks reapplied).",

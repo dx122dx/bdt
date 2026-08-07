@@ -11,10 +11,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.billy65536.infrastructure.core.config.ConfigAccessor;
+import com.billy65536.infrastructure.core.config.ConfigAccessException;
 import com.billy65536.infrastructure.core.config.ConfigDescriptor;
+import com.billy65536.infrastructure.core.config.ConfigLockedException;
 import com.billy65536.infrastructure.core.config.ConfigPath;
 import com.billy65536.infrastructure.core.module.IModule;
-import com.billy65536.infrastructure.core.module.ModuleConfigReflectionAccessor;
 import com.billy65536.infrastructure.core.module.ModuleRegistry;
 import com.billy65536.infrastructure.security.builtin.ConfigLocker;
 import com.billy65536.infrastructure.security.builtin.ConfigLockerPolicyConfig;
@@ -452,8 +454,8 @@ class ConfigLockerTest {
             config.components.qshop.highlightEnabled = false;
             applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
 
-            assertThrows(ModuleConfigReflectionAccessor.ConfigLockedException.class,
-                    () -> ModuleConfigReflectionAccessor.setValue(descriptor, QSHOP_HIGHLIGHT, "true"));
+            assertThrows(ConfigLockedException.class,
+                    () -> ConfigAccessor.setValue(descriptor, QSHOP_HIGHLIGHT, "true"));
             assertFalse(config.components.qshop.highlightEnabled, "被拒绝的写入不得落到配置对象上");
         }
 
@@ -463,8 +465,8 @@ class ConfigLockerTest {
             config.components.qshop.highlightEnabled = true;
             applyLocks(locksFull(QSHOP_HIGHLIGHT, null)); // 仅锁定，不强制值
 
-            assertThrows(ModuleConfigReflectionAccessor.ConfigLockedException.class,
-                    () -> ModuleConfigReflectionAccessor.resetValue(descriptor, QSHOP_HIGHLIGHT));
+            assertThrows(ConfigLockedException.class,
+                    () -> ConfigAccessor.resetValue(descriptor, QSHOP_HIGHLIGHT));
             assertTrue(config.components.qshop.highlightEnabled,
                     "reset 必须与 set 受同一道门禁约束，否则可重置回默认值绕过锁定");
         }
@@ -474,15 +476,15 @@ class ConfigLockerTest {
         void setValue_lockedWithoutForcedValue_shouldBeRejected() {
             applyLocks(locksFull(QSHOP_HIGHLIGHT, null));
 
-            assertThrows(ModuleConfigReflectionAccessor.ConfigLockedException.class,
-                    () -> ModuleConfigReflectionAccessor.setValue(descriptor, QSHOP_HIGHLIGHT, "true"));
+            assertThrows(ConfigLockedException.class,
+                    () -> ConfigAccessor.setValue(descriptor, QSHOP_HIGHLIGHT, "true"));
         }
 
         @Test
         @DisplayName("未锁路径可正常写入")
         void setValue_unlockedPath_shouldSucceed() {
             assertDoesNotThrow(() ->
-                    ModuleConfigReflectionAccessor.setValue(descriptor, QSHOP_HIGHLIGHT, "true"));
+                    ConfigAccessor.setValue(descriptor, QSHOP_HIGHLIGHT, "true"));
             assertTrue(config.components.qshop.highlightEnabled);
         }
 
@@ -493,15 +495,15 @@ class ConfigLockerTest {
             unlock(QSHOP_HIGHLIGHT_FULL);
 
             assertDoesNotThrow(() ->
-                    ModuleConfigReflectionAccessor.setValue(descriptor, QSHOP_HIGHLIGHT, "true"));
+                    ConfigAccessor.setValue(descriptor, QSHOP_HIGHLIGHT, "true"));
             assertTrue(config.components.qshop.highlightEnabled);
         }
 
         @Test
         @DisplayName("applyLockedValue 只能作用于被锁路径，不是通用写入后门")
         void applyLockedValue_unlockedPath_shouldThrow() {
-            assertThrows(ModuleConfigReflectionAccessor.ConfigAccessException.class,
-                    () -> ModuleConfigReflectionAccessor.applyLockedValue(descriptor, QSHOP_HIGHLIGHT));
+            assertThrows(ConfigAccessException.class,
+                    () -> ConfigAccessor.applyLockedValue(descriptor, QSHOP_HIGHLIGHT));
         }
 
         @Test
@@ -510,7 +512,7 @@ class ConfigLockerTest {
             config.components.qshop.highlightEnabled = true;
             applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
 
-            Object written = ModuleConfigReflectionAccessor.applyLockedValue(descriptor, QSHOP_HIGHLIGHT);
+            Object written = ConfigAccessor.applyLockedValue(descriptor, QSHOP_HIGHLIGHT);
 
             assertEquals(Boolean.FALSE, written);
             assertFalse(config.components.qshop.highlightEnabled);

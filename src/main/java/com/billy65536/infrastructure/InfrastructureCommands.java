@@ -5,11 +5,13 @@ import java.util.Locale;
 
 import com.billy65536.infrastructure.core.cli.ArgParser;
 import com.billy65536.infrastructure.core.cli.CliCompletion;
+import com.billy65536.infrastructure.core.config.ConfigAccessor;
+import com.billy65536.infrastructure.core.config.ConfigAccessException;
 import com.billy65536.infrastructure.core.config.ConfigDescriptor;
+import com.billy65536.infrastructure.core.config.ConfigLockedException;
 import com.billy65536.infrastructure.core.config.ConfigManager;
 import com.billy65536.infrastructure.core.module.IModule;
 import com.billy65536.infrastructure.core.module.ModuleCommandRegistrar;
-import com.billy65536.infrastructure.core.module.ModuleConfigReflectionAccessor;
 import com.billy65536.infrastructure.core.module.ModuleRegistry;
 import com.billy65536.infrastructure.security.builtin.ConfigLocker;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -120,7 +122,7 @@ public final class InfrastructureCommands {
                     .append(Text.literal(" = ").formatted(Formatting.GRAY))
                     .append(Text.literal(String.valueOf(value)).formatted(Formatting.AQUA))
                     .append(Text.literal("  (type: ").formatted(Formatting.DARK_GRAY))
-                    .append(Text.literal(ConfigManager.getTypeName(
+                    .append(Text.literal(ConfigAccessor.getTypeName(
                                     ConfigManager.findDescriptorByPath(fullPath),
                                     ConfigManager.dotPathOf(fullPath)))
                             .formatted(Formatting.DARK_GRAY))
@@ -129,7 +131,7 @@ public final class InfrastructureCommands {
                     .append(Text.literal(")").formatted(Formatting.DARK_GRAY));
             send(client, out);
             return 1;
-        } catch (ModuleConfigReflectionAccessor.ConfigAccessException e) {
+        } catch (ConfigAccessException e) {
             send(client, Text.translatable("infrastructure.msg.config_error", fullPath, e.getMessage())
                     .formatted(Formatting.RED));
             return 0;
@@ -153,10 +155,10 @@ public final class InfrastructureCommands {
                                 Text.literal(a.key).formatted(Formatting.GOLD),
                                 Text.literal(String.valueOf(old)).formatted(Formatting.GRAY),
                                 Text.literal(a.value).formatted(Formatting.GREEN)));
-            } catch (ModuleConfigReflectionAccessor.ConfigAccessException e) {
+            } catch (ConfigAccessException e) {
                 send(client, Text.translatable("infrastructure.msg.config_error",
                                 a.key, e.getMessage()).formatted(Formatting.RED));
-            } catch (ModuleConfigReflectionAccessor.ConfigLockedException e) {
+            } catch (ConfigLockedException e) {
                 send(client, Text.translatable("infrastructure.msg.config_locked",
                                 a.key, e.getViolatedPolicy(), e.getOriginExecutor()).formatted(Formatting.RED));
             }
@@ -178,11 +180,11 @@ public final class InfrastructureCommands {
                             Text.literal(String.valueOf(ConfigManager.getValue(fullPath)))
                                     .formatted(Formatting.GREEN)));
             return 1;
-        } catch (ModuleConfigReflectionAccessor.ConfigAccessException e) {
+        } catch (ConfigAccessException e) {
             send(client, Text.translatable("infrastructure.msg.config_error",
                             fullPath, e.getMessage()).formatted(Formatting.RED));
             return 0;
-        } catch (ModuleConfigReflectionAccessor.ConfigLockedException e) {
+        } catch (ConfigLockedException e) {
             send(client, Text.translatable("infrastructure.msg.config_locked",
                             fullPath, e.getViolatedPolicy(), e.getOriginExecutor()).formatted(Formatting.RED));
             return 0;
@@ -304,7 +306,7 @@ public final class InfrastructureCommands {
                     .valueProvider((ctx, key) -> {
                         ConfigDescriptor d = ConfigManager.findDescriptorByPath(key);
                         if (d == null) return List.of();
-                        return ConfigManager.suggestValues(d, ConfigManager.dotPathOf(key));
+                        return ConfigAccessor.suggestValues(d, ConfigManager.dotPathOf(key));
                     })
                     .build();
 
@@ -450,7 +452,7 @@ public final class InfrastructureCommands {
                     .append("\n");
         } else {
             for (ConfigDescriptor d : descriptors) {
-                int count = ConfigManager.listPaths(d).size();
+                int count = ConfigAccessor.listPaths(d).size();
                 out = out.append(Text.literal("    - ")
                                 .append(Text.literal(d.path().targetString()).formatted(Formatting.AQUA))
                                 .append(Text.literal(" "))

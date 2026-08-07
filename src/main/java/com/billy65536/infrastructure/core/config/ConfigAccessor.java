@@ -1,4 +1,4 @@
-package com.billy65536.infrastructure.core.module;
+package com.billy65536.infrastructure.core.config;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -13,8 +13,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.billy65536.infrastructure.core.config.ConfigDescriptor;
-import com.billy65536.infrastructure.core.config.ConfigPath;
 import com.billy65536.infrastructure.security.SecurityPolicyViolationException;
 import com.billy65536.infrastructure.security.builtin.ConfigLocker;
 
@@ -45,32 +43,15 @@ import com.billy65536.infrastructure.security.builtin.ConfigLocker;
  * 基本类型 / 包装类 / String / 枚举视为叶子（停止递归），其余 POJO 继续向下展开。
  * 使用 {@link LinkedHashMap} 保证路径顺序与字段声明顺序一致（影响补全与列举）。</p>
  */
-public final class ModuleConfigReflectionAccessor {
+public final class ConfigAccessor {
 
-    private ModuleConfigReflectionAccessor() {}
+    private ConfigAccessor() {}
 
     /** Class → 点分路径到 Field 链（从根到叶）索引，按类缓存。 */
     private static final Map<Class<?>, Map<String, Field[]>> INDEX_CACHE = new ConcurrentHashMap<>();
 
     /** Class → 默认值实例快照，按类缓存。 */
     private static final Map<Class<?>, Object> PRISTINE_CACHE = new ConcurrentHashMap<>();
-
-    /** 配置访问异常：路径不存在、值格式非法、无参构造缺失或反射失败。 */
-    public static class ConfigAccessException extends Exception {
-        public ConfigAccessException(String message) {
-            super(message);
-        }
-    }
-
-        /** 配置写入被安全策略拒绝：目标路径处于 {@link ConfigLocker} 锁定之下。 */
-    public static class ConfigLockedException extends SecurityPolicyViolationException {
-        public ConfigLockedException(String fullPath) {
-            super("Config '" + fullPath + "' is locked by security policy and cannot be modified",
-                "unkown", // TODO 添加安全审计确认来源
-                ConfigLocker.EXECUTOR_ID.toString()
-            );
-        }
-    }
 
     // ==================== 索引构建 ====================
 
@@ -412,6 +393,6 @@ public final class ModuleConfigReflectionAccessor {
      */
     private static final class InfrastructureModHolder {
         private static final org.slf4j.Logger LOGGER =
-                org.slf4j.LoggerFactory.getLogger(ModuleConfigReflectionAccessor.class);
+                org.slf4j.LoggerFactory.getLogger(ConfigAccessor.class);
     }
 }

@@ -39,6 +39,7 @@
     "infrastructure.msg.config_set": "已设置 %s：%s → %s",
     "infrastructure.msg.config_reset": "已重置 %s：%s → %s",
     "infrastructure.msg.config_error": "配置 %s 错误：%s",
+    "infrastructure.msg.config_locked": "配置 %s 已被安全策略锁定，无法修改（策略：%s，执行器：%s）",
     "infrastructure.msg.config_set_usage": "用法：/inf config set <模块:路径=值> [模块:路径=值 ...]",
     "infrastructure.msg.config_set_need_value": "配置 %s 缺少 = 值，请使用 模块:路径=值 的形式",
     "infrastructure.msg.config_reloaded_all": "已重载全部模块配置（已重放服务器锁定值）。",

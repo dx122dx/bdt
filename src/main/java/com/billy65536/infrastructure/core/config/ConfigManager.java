@@ -1,30 +1,28 @@
 package com.billy65536.infrastructure.core.config;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 
 import com.billy65536.infrastructure.core.module.IModule;
-import com.billy65536.infrastructure.core.module.ModuleConfigReflectionAccessor;
 import com.billy65536.infrastructure.core.module.ModuleRegistry;
-import com.billy65536.infrastructure.core.module.ModuleConfigReflectionAccessor.ConfigAccessException;
-import com.billy65536.infrastructure.core.module.ModuleConfigReflectionAccessor.ConfigLockedException;
 
 /**
- * 模块配置统一操作管理器（静态工具）。
+ * 模块配置「寻址 / 补全」门面（静态工具）。
  *
- * <p>把「用户可见的完整路径 → 模块 → 描述符 → 字段路径」的解析与读写集中在此，
- * 供命令层（{@code /inf config}）与配置锁定层（{@code ConfigLocker}）共用，
+ * <p>本层只负责把<b>用户可见的完整路径 → 模块 → 描述符 → 字段路径</b>解析出来，
+ * 然后把读写转交给 {@link ConfigAccessor}（真正做反射的层）。它<b>不认识任何反射细节</b>，
+ * 也<b>不做</b>安全锁定判定：写入类操作一律下沉到 {@link ConfigAccessor}，
+ * 锁定门禁在那里统一收口。</p>
+ *
+ * <p>命令层（{@code /inf config}）与 {@code ConfigLocker} 共用本层的寻址与补全能力；
+ * 而描述符级（已定位字段）的读写由 {@link ConfigAccessor} 直接提供，
  * 使模块配置访问成为 infrastructure 的通用能力。</p>
- *
- * <p>本层<b>不做</b>安全锁定判定：写入类操作一律下沉到
- * {@link ModuleConfigReflectionAccessor}，锁定门禁在那里统一收口。</p>
  *
  * <p>路径解析规则见 {@link ConfigPath}：完整形态 {@code <module>:<id>/<dot.path>}，
  * 省略形态 {@code <module>:<dot.path>}（段名为默认值 {@code config} 时可省）。
  * 本管理器按 module 查模块，再在模块的描述符列表中按 id 匹配段，最后用 dot.path 调
- * {@link ModuleConfigReflectionAccessor} 做反射读写。</p>
+ * {@link ConfigAccessor} 做反射读写。</p>
  */
 public final class ConfigManager {
 
@@ -115,89 +113,38 @@ public final class ConfigManager {
         }
     }
 
-    /** 全部配置路径（某模块某段），供补全。 */
-    public static Collection<String> listPaths(ConfigDescriptor descriptor) {
-        return ModuleConfigReflectionAccessor.listPaths(descriptor);
-    }
-
-    /** 路径是否存在（基于描述符的配置对象）。 */
-    public static boolean hasPath(ConfigDescriptor descriptor, String dotPath) {
-        return ModuleConfigReflectionAccessor.hasPath(descriptor, dotPath);
-    }
-
-    /** 字段类型简名。 */
-    public static String getTypeName(ConfigDescriptor descriptor, String dotPath) {
-        return ModuleConfigReflectionAccessor.getTypeName(descriptor, dotPath);
-    }
-
-    /** 读取值。 */
-    public static Object getValue(ConfigDescriptor descriptor, String dotPath) {
-        return ModuleConfigReflectionAccessor.getValue(descriptor, dotPath);
-    }
-
-    /** 默认值。 */
-    public static Object getDefaultValue(ConfigDescriptor descriptor, String dotPath) {
-        return ModuleConfigReflectionAccessor.getDefaultValue(descriptor, dotPath);
-    }
-
-    /** 值补全候选。 */
-    public static List<String> suggestValues(ConfigDescriptor descriptor, String dotPath) {
-        return ModuleConfigReflectionAccessor.suggestValues(descriptor, dotPath);
-    }
-
-    /**
-     * 写入字符串值。锁定检查由 {@link ModuleConfigReflectionAccessor#setValue} 统一收口，
-     * 本层不再重复判定。
-     *
-     * @throws ConfigLockedException 路径被安全配置锁定
-     * @throws ConfigAccessException 路径不存在、格式非法
-     */
-    public static void setValue(ConfigDescriptor descriptor, String dotPath, String raw)
-            throws ConfigLockedException, ConfigAccessException {
-        try {
-            ModuleConfigReflectionAccessor.setValue(descriptor, dotPath, raw);
-        } catch (ModuleConfigReflectionAccessor.ConfigAccessException e) {
-            throw new ConfigAccessException(e.getMessage());
-        }
-    }
-
-    /**
-     * 重置为默认值。锁定检查由 {@link ModuleConfigReflectionAccessor#resetValue} 统一收口。
-     *
-     * @throws ConfigLockedException 路径被安全配置锁定
-     * @throws ConfigAccessException 路径不存在、格式非法
-     */
-    public static void resetValue(ConfigDescriptor descriptor, String dotPath)
-            throws ConfigLockedException, ConfigAccessException {
-        try {
-            ModuleConfigReflectionAccessor.resetValue(descriptor, dotPath);
-        } catch (ModuleConfigReflectionAccessor.ConfigAccessException e) {
-            throw new ConfigAccessException(e.getMessage());
-        }
-    }
-
     /** 解析完整路径并读取字段值（供命令层 get）。 */
     public static Object getValue(String fullPath) throws ConfigAccessException {
         Resolved r = resolve(fullPath);
-        return getValue(r.descriptor, r.dotPath);
+        return ConfigAccessor.getValue(r.descriptor, r.dotPath);
     }
 
     /** 解析完整路径并读取默认值（供命令层 get 展示）。 */
     public static Object getDefaultValue(String fullPath) throws ConfigAccessException {
         Resolved r = resolve(fullPath);
-        return getDefaultValue(r.descriptor, r.dotPath);
+        return ConfigAccessor.getDefaultValue(r.descriptor, r.dotPath);
     }
 
-    /** 解析完整路径并写值（供命令层 set）。 */
+    /**
+     * 解析完整路径并写值（供命令层 set）。
+     *
+     * @throws ConfigLockedException 路径被安全配置锁定
+     * @throws ConfigAccessException 路径不存在、格式非法
+     */
     public static void setValue(String fullPath, String raw) throws ConfigLockedException, ConfigAccessException {
         Resolved r = resolve(fullPath);
-        setValue(r.descriptor, r.dotPath, raw);
+        ConfigAccessor.setValue(r.descriptor, r.dotPath, raw);
     }
 
-    /** 解析完整路径并重置（供命令层 reset）。 */
+    /**
+     * 解析完整路径并重置（供命令层 reset）。
+     *
+     * @throws ConfigLockedException 路径被安全配置锁定
+     * @throws ConfigAccessException 路径不存在、格式非法
+     */
     public static void resetValue(String fullPath) throws ConfigLockedException, ConfigAccessException {
         Resolved r = resolve(fullPath);
-        resetValue(r.descriptor, r.dotPath);
+        ConfigAccessor.resetValue(r.descriptor, r.dotPath);
     }
 
     /** 补全：解析已输入的前缀，返回候选的完整路径串（含用户最简形态）。 */
@@ -208,7 +155,7 @@ public final class ConfigManager {
         for (IModule m : ModuleRegistry.getAll()) {
             for (ConfigDescriptor d : m.getConfigDescriptors()) {
                 ConfigPath cp = d.path();
-                for (String dotPath : ModuleConfigReflectionAccessor.listPaths(d)) {
+                for (String dotPath : ConfigAccessor.listPaths(d)) {
                     ConfigPath full = ConfigPath.of(cp.module(), cp.id(), dotPath);
                     String user = full.toUserString();
                     if (user.toLowerCase(Locale.ROOT).startsWith(lower)) {
@@ -241,12 +188,6 @@ public final class ConfigManager {
         return out;
     }
 
-    /** 补全：赋值候选（路径=value）。 */
-    public static List<String> suggestAssignments(String prefix) {
-        // 复用 suggestPaths，交由命令层 CliCompletion 拼 =value
-        return suggestPaths(prefix);
-    }
-
     /**
      * 补全：返回候选的<b>显式</b>完整路径串（{@code module:id/path}，段名始终展开，
      * 不做省略）。
@@ -262,7 +203,7 @@ public final class ConfigManager {
         for (IModule m : ModuleRegistry.getAll()) {
             for (ConfigDescriptor d : m.getConfigDescriptors()) {
                 ConfigPath cp = d.path();
-                for (String dotPath : ModuleConfigReflectionAccessor.listPaths(d)) {
+                for (String dotPath : ConfigAccessor.listPaths(d)) {
                     ConfigPath full = ConfigPath.of(cp.module(), cp.id(), dotPath);
                     String explicit = full.toString();
                     if (explicit.toLowerCase(Locale.ROOT).startsWith(lower)) {

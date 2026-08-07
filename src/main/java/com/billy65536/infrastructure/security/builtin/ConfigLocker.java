@@ -11,11 +11,13 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.billy65536.infrastructure.core.config.ConfigAccessor;
 import com.billy65536.infrastructure.core.config.ConfigDescriptor;
+import com.billy65536.infrastructure.core.config.ConfigAccessException;
+import com.billy65536.infrastructure.core.config.ConfigLockedException;
 import com.billy65536.infrastructure.core.config.ConfigManager;
 import com.billy65536.infrastructure.core.config.ConfigPath;
 import com.billy65536.infrastructure.core.module.IModule;
-import com.billy65536.infrastructure.core.module.ModuleConfigReflectionAccessor;
 import com.billy65536.infrastructure.core.module.ModuleRegistry;
 import com.billy65536.infrastructure.security.core.policy.ISecurityExecutor;
 import com.billy65536.infrastructure.security.core.policy.SecurityManager;
@@ -179,7 +181,7 @@ public final class ConfigLocker implements ISecurityExecutor {
     /**
      * 获取某完整配置路径被强制的值；未锁定或「仅锁定无强制值」均返回 null。
      *
-     * <p>写入侧（{@link ModuleConfigReflectionAccessor#applyLockedValue}）据此自行取值，
+     * <p>写入侧（{@link ConfigAccessor#applyLockedValue}）据此自行取值，
      * 而不由调用方传入——强制值的唯一真相源是本约束表。</p>
      */
     public static String getForcedValue(String fullPath) {
@@ -203,7 +205,7 @@ public final class ConfigLocker implements ISecurityExecutor {
      * 防 GUI / 磁盘绕过。
      *
      * <p>只遍历路径并筛出被锁项，具体写什么值由
-     * {@link ModuleConfigReflectionAccessor#applyLockedValue} 回查本类的约束表决定。</p>
+     * {@link ConfigAccessor#applyLockedValue} 回查本类的约束表决定。</p>
      *
      * @param descriptors 模块暴露的配置描述符集合（可为空）
      */
@@ -211,12 +213,12 @@ public final class ConfigLocker implements ISecurityExecutor {
         for (ConfigDescriptor d : descriptors) {
             if (d == null) continue;
             ConfigPath base = d.path();
-            for (String dotPath : ConfigManager.listPaths(d)) {
+            for (String dotPath : ConfigAccessor.listPaths(d)) {
                 String full = ConfigPath.of(base.module(), base.id(), dotPath).toString();
                 if (!activeConstraints.containsKey(full)) continue;
                 try {
-                    ModuleConfigReflectionAccessor.applyLockedValue(d, dotPath);
-                } catch (ModuleConfigReflectionAccessor.ConfigAccessException e) {
+                    ConfigAccessor.applyLockedValue(d, dotPath);
+                } catch (ConfigAccessException e) {
                     LOGGER.warn("Failed to apply value to locked config item '{}': {}", full, e.getMessage());
                 }
             }
@@ -244,7 +246,7 @@ public final class ConfigLocker implements ISecurityExecutor {
     private static String readCurrent(String fullPath) {
         ConfigDescriptor d = ConfigManager.findDescriptorByPath(fullPath);
         if (d == null) return null;
-        return stringify(ConfigManager.getValue(d, ConfigManager.dotPathOf(fullPath)));
+        return stringify(ConfigAccessor.getValue(d, ConfigManager.dotPathOf(fullPath)));
     }
 
     /**
@@ -262,7 +264,7 @@ public final class ConfigLocker implements ISecurityExecutor {
      * 把记录的本地原值写回活动配置，并持久化受影响的模块。
      *
      * <p>调用前相关约束<b>必须已从 {@link #activeConstraints} 移除</b>，否则
-     * {@link ModuleConfigReflectionAccessor#setValue} 的锁定门禁会拒绝写回。</p>
+     * {@link ConfigAccessor#setValue} 的锁定门禁会拒绝写回。</p>
      *
      * @param originals 完整路径 → 原值字符串；value 为 null 表示当初未能读取，跳过
      * @return 实际还原成功的条目数
@@ -277,14 +279,14 @@ public final class ConfigLocker implements ISecurityExecutor {
             ConfigDescriptor d = ConfigManager.findDescriptorByPath(full);
             if (d == null) continue;
             try {
-                ModuleConfigReflectionAccessor.setValue(
+                ConfigAccessor.setValue(
                         d, ConfigManager.dotPathOf(full), e.getValue());
                 restored++;
                 IModule m = ConfigManager.findModuleOfPath(full);
                 if (m != null) dirty.add(m);
-            } catch (ModuleConfigReflectionAccessor.ConfigAccessException ex) {
+            } catch (ConfigAccessException ex) {
                 LOGGER.warn("Failed to restore local config value for '{}': {}", full, ex.getMessage());
-            } catch (ModuleConfigReflectionAccessor.ConfigLockedException ex) {
+            } catch (ConfigLockedException ex) {
                 LOGGER.warn("Failed to restore local config value for '{}': {}", full, ex.getMessage());
             }
         }

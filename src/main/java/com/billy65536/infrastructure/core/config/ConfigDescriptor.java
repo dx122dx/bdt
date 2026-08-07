@@ -18,7 +18,7 @@ import net.minecraft.client.gui.screen.Screen;
  * <ul>
  *   <li>{@link #path()} —— 本配置对象的逻辑路径（段名 {@code id} 自定义，
  *       见 {@link ConfigPath} 的省略规则）；</li>
- *   <li>{@link #getConfig()} —— 配置实例引用（供 {@code ModuleConfigReflectionAccessor} 反射读写）；</li>
+ *   <li>{@link #getConfig()} —— 配置实例引用（供 {@code ConfigAccessor} 反射读写）；</li>
  *   <li>{@link #defaultValue()} —— 该配置对象的整体默认初始值
  *       （一个全新的默认值实例，{@code reset} 与默认值展示用）；</li>
  *   <li>{@link #dangerous()} —— 是否含「危险配置项」：被服务器锁定策略强制的值，
