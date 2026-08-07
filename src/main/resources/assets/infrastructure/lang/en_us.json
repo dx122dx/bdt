@@ -68,7 +68,7 @@
     "infrastructure.msg.config_composite_opened": "Opened composite config overview.",
 
     "infrastructure.module.security.name": "Security Manager",
-    "infrastructure.module.security.description": "Hosts the extensible security policy framework. Provides /inf security list|status|info|active|deactive.",
+    "infrastructure.module.security.description": "Hosts the extensible security policy framework. Provides /inf security list|status|active|deactive.",
 
     "infrastructure.security.policy.server_optin.name": "Server Opt-in",
     "infrastructure.security.policy.server_optin.description": "Locks protected config entries when joining a multiplayer server, until the server grants authorization.",
@@ -82,7 +82,6 @@
     "infrastructure.msg.security.state_inactive": "[INACTIVE]",
     "infrastructure.msg.security.yes": "yes",
     "infrastructure.msg.security.no": "no",
-    "infrastructure.msg.security.info_id": "Security entry: %s",
     "infrastructure.msg.security.policy_status": "Policy %s is %s",
     "infrastructure.msg.security.executor_status": "Executor %s is %s",
     "infrastructure.msg.security.field_name": "Name: ",

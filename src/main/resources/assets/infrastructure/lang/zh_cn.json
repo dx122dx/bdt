@@ -68,7 +68,7 @@
     "infrastructure.msg.config_composite_opened": "已打开复合配置总览界面。",
 
     "infrastructure.module.security.name": "安全管理器",
-    "infrastructure.module.security.description": "承载可拓展安全策略框架。提供 /inf security list|status|info|active|deactive 命令。",
+    "infrastructure.module.security.description": "承载可拓展安全策略框架。提供 /inf security list|status|active|deactive 命令。",
 
     "infrastructure.security.policy.server_optin.name": "服务端 opt-in",
     "infrastructure.security.policy.server_optin.description": "进入多人服务器时锁定受保护配置项，直至服务端显式授权。",
@@ -82,7 +82,6 @@
     "infrastructure.msg.security.state_inactive": "[未激活]",
     "infrastructure.msg.security.yes": "是",
     "infrastructure.msg.security.no": "否",
-    "infrastructure.msg.security.info_id": "安全条目：%s",
     "infrastructure.msg.security.policy_status": "策略 %s 当前 %s",
     "infrastructure.msg.security.executor_status": "执行器 %s 当前 %s",
     "infrastructure.msg.security.field_name": "名称：",

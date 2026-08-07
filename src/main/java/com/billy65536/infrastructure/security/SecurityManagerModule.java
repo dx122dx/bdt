@@ -13,6 +13,7 @@ import com.billy65536.infrastructure.security.core.policy.ISecurityPolicy;
 import com.billy65536.infrastructure.security.core.policy.PolicyRegistry;
 import com.billy65536.infrastructure.security.pack.PolicyPackManager;
 import com.billy65536.infrastructure.security.policy.ServerOptinPolicy;
+import com.billy65536.infrastructure.security.policy.server_optin.ConfigLocker;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
@@ -44,7 +45,7 @@ public final class SecurityManagerModule implements IModule {
      * 本模块自身的默认受保护配置项：进入多人服务器后禁止客户端绕过调试开关。
      *
      * <p>key 为<b>纯字段点分路径</b>，模块与段名前缀由
-     * {@link SecurityPolicies#contributeDefaultLocks(String, Map)} 自动补全，
+     * {@link ConfigLocker#registerDefaultLocks(String, Map)} 自动补全，
      * 展开后为 {@code security:config/allowDebugOverride}，与
      * {@link #getConfigDescriptors()} 暴露的路径一致。</p>
      */
@@ -85,7 +86,7 @@ public final class SecurityManagerModule implements IModule {
      */
     @Override
     public void onInitializeModule() {
-        SecurityPolicies.contributeDefaultLocks("security", DEFAULT_LOCKS);
+        ConfigLocker.registerDefaultLocks("security", DEFAULT_LOCKS);
 
         // 1) 框架内置策略
         PolicyRegistry.register(ServerOptinPolicy.INSTANCE);

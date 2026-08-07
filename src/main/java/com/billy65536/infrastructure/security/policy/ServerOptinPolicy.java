@@ -3,10 +3,10 @@ package com.billy65536.infrastructure.security.policy;
 import java.util.List;
 
 import com.billy65536.infrastructure.InfrastructureMod;
-import com.billy65536.infrastructure.security.ConfigLocker;
 import com.billy65536.infrastructure.security.core.policy.ActivationTrigger;
 import com.billy65536.infrastructure.security.core.policy.ISecurityExecutor;
 import com.billy65536.infrastructure.security.core.policy.ISecurityPolicy;
+import com.billy65536.infrastructure.security.policy.server_optin.ConfigLocker;
 
 import net.fabricmc.fabric.api.event.Event;
 import net.fabricmc.fabric.api.event.EventFactory;
@@ -18,7 +18,7 @@ import net.minecraft.util.Identifier;
  *
  * <p>语义：进入多人服务器时，把各模块登记的默认受保护配置项全部锁定，等待服务端
  * 显式授权后方可放开；断开连接时释放全部锁定。实际动作由下辖的
- * {@link ConfigLockerExecutor} 执行。</p>
+ * {@link ConfigLocker} 执行。</p>
  *
  * <p>本策略允许手动开关（{@link #isManuallyToggleable()} 为 {@code true}），
  * 以便调试模组与玩家在必要时经
@@ -102,13 +102,13 @@ public final class ServerOptinPolicy implements ISecurityPolicy {
 
     @Override
     public List<ISecurityExecutor> getExecutors() {
-        return List.of(ConfigLockerExecutor.INSTANCE);
+        return List.of(ConfigLocker.getInstance());
     }
 
     /**
      * 激活回调：空实现。
      *
-     * <p>实际锁定由 {@link ConfigLockerExecutor} 承担，本策略无需额外动作。
+     * <p>实际锁定由 {@link ConfigLocker} 承担，本策略无需额外动作。
      * {@link #LOCKS_APPLIED} 也不在此发出——注册表的调用顺序是
      * 「策略 {@code onActivate} → 执行器 {@code onEnable}」，此刻锁定尚未生效；
      * 该子事件改由 {@link #fireLocksApplied()} 在锁定完成后补发。</p>
@@ -120,7 +120,7 @@ public final class ServerOptinPolicy implements ISecurityPolicy {
     /**
      * 停用回调：空实现。
      *
-     * <p>锁定释放同样由 {@link ConfigLockerExecutor} 承担，本策略无需额外动作。</p>
+     * <p>锁定释放同样由 {@link ConfigLocker} 承担，本策略无需额外动作。</p>
      */
     @Override
     public void onDeactivate() {

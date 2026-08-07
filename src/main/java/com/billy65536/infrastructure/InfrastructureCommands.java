@@ -10,8 +10,7 @@ import com.billy65536.infrastructure.core.config.ConfigManager;
 import com.billy65536.infrastructure.core.module.IModule;
 import com.billy65536.infrastructure.core.module.ModuleCommandRegistrar;
 import com.billy65536.infrastructure.core.module.ModuleRegistry;
-import com.billy65536.infrastructure.security.ConfigLocker;
-
+import com.billy65536.infrastructure.security.policy.server_optin.ConfigLocker;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;

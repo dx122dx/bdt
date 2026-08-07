@@ -12,6 +12,7 @@ import java.util.Map;
 
 import com.billy65536.infrastructure.core.config.ConfigDescriptor;
 import com.billy65536.infrastructure.core.config.ConfigPath;
+import com.billy65536.infrastructure.security.policy.server_optin.ConfigLocker;
 
 import static org.junit.jupiter.api.Assertions.*;
 

@@ -11,6 +11,7 @@ import com.billy65536.infrastructure.InfrastructureMod;
 import com.billy65536.infrastructure.security.core.policy.ISecurityExecutor;
 import com.billy65536.infrastructure.security.core.policy.ISecurityPolicy;
 import com.billy65536.infrastructure.security.core.policy.PolicyRegistry;
+import com.billy65536.infrastructure.security.policy.server_optin.ConfigLocker;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 
@@ -33,7 +34,6 @@ import net.minecraft.util.Identifier;
  *   <li>{@code /inf security list} —— 树形列出全部策略及其下辖执行器</li>
  *   <li>{@code /inf security status} —— 仅到策略层级，展示各策略是否激活</li>
  *   <li>{@code /inf security status <policy|executor>} —— 展示指定项的完整详情</li>
- *   <li>{@code /inf security info <policy|executor>} —— 展示元信息（来源、描述、子事件等）</li>
  *   <li>{@code /inf security active|deactive <policy>} —— 手动激活 / 停用策略，
  *       仅对声明了 {@link ISecurityPolicy#isManuallyToggleable()} 的策略开放</li>
  * </ul>
@@ -105,14 +105,6 @@ public final class SecurityCommands {
                 .then(ClientCommandManager.argument("id", IdentifierArgumentType.identifier())
                         .suggests(TARGET_ID_SUGGESTIONS)
                         .executes(ctx -> statusDetail(
-                                ctx.getSource().getClient(),
-                                ctx.getArgument("id", Identifier.class)))));
-
-        // ===== /inf security info <policy|executor> =====
-        root.then(ClientCommandManager.literal("info")
-                .then(ClientCommandManager.argument("id", IdentifierArgumentType.identifier())
-                        .suggests(TARGET_ID_SUGGESTIONS)
-                        .executes(ctx -> showInfo(
                                 ctx.getSource().getClient(),
                                 ctx.getArgument("id", Identifier.class)))));
 
@@ -232,52 +224,6 @@ public final class SecurityCommands {
                             .formatted(Formatting.AQUA))));
             sendMsg(client, indent(Text.translatable("infrastructure.msg.security.field_desc")
                     .append(executor.getDescription().copy().formatted(Formatting.GRAY))));
-            return 1;
-        }
-
-        sendNotFound(client, id);
-        return 0;
-    }
-
-    /** 展示策略或执行器的元信息。 */
-    private static int showInfo(MinecraftClient client, Identifier rawId) {
-        Identifier id = normalizeTargetId(rawId);
-
-        ISecurityPolicy policy = PolicyRegistry.get(id);
-        if (policy != null) {
-            sendMsg(client, Text.translatable("infrastructure.msg.security.info_id",
-                            Text.literal(id.toString()).formatted(Formatting.GOLD))
-                    .formatted(Formatting.GRAY));
-            sendMsg(client, indent(Text.translatable("infrastructure.msg.security.field_name")
-                    .append(policy.getName().copy().formatted(Formatting.AQUA))));
-            sendMsg(client, indent(Text.translatable("infrastructure.msg.security.field_desc")
-                    .append(policy.getDescription().copy().formatted(Formatting.GRAY))));
-            sendMsg(client, indent(Text.translatable("infrastructure.msg.security.field_source")
-                    .append(Text.literal(id.getNamespace()).formatted(Formatting.AQUA))));
-            sendMsg(client, indent(Text.translatable("infrastructure.msg.security.field_trigger")
-                    .append(Text.literal(policy.getTrigger().name()).formatted(Formatting.AQUA))));
-            sendMsg(client, indent(Text.translatable("infrastructure.msg.security.field_toggleable")
-                    .append(boolText(policy.isManuallyToggleable()))));
-            sendMsg(client, indent(Text.translatable("infrastructure.msg.security.field_state")
-                    .append(statusText(PolicyRegistry.isActive(id)))));
-            return 1;
-        }
-
-        ISecurityExecutor executor = PolicyRegistry.getExecutor(id);
-        if (executor != null) {
-            ISecurityPolicy owner = PolicyRegistry.findPolicyOf(id);
-            sendMsg(client, Text.translatable("infrastructure.msg.security.info_id",
-                            Text.literal(id.toString()).formatted(Formatting.GOLD))
-                    .formatted(Formatting.GRAY));
-            sendMsg(client, indent(Text.translatable("infrastructure.msg.security.field_name")
-                    .append(executor.getName().copy().formatted(Formatting.AQUA))));
-            sendMsg(client, indent(Text.translatable("infrastructure.msg.security.field_desc")
-                    .append(executor.getDescription().copy().formatted(Formatting.GRAY))));
-            sendMsg(client, indent(Text.translatable("infrastructure.msg.security.field_owner")
-                    .append(Text.literal(owner == null ? "-" : owner.getId().toString())
-                            .formatted(Formatting.AQUA))));
-            sendMsg(client, indent(Text.translatable("infrastructure.msg.security.field_state")
-                    .append(statusText(PolicyRegistry.isExecutorEnabled(id)))));
             return 1;
         }
 

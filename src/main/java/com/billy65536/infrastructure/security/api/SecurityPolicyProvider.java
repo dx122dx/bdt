@@ -21,7 +21,8 @@ package com.billy65536.infrastructure.security.api;
  * <p>注册入口内部即可通过
  * {@link com.billy65536.infrastructure.security.core.policy.PolicyRegistry#register}
  * 注册全新策略，或经
- * {@link com.billy65536.infrastructure.security.SecurityPolicies} 向内置策略贡献约束；
+ * {@link com.billy65536.infrastructure.security.policy.server_optin.ConfigLocker#registerDefaultLocks(String, Map)}
+ * 向内置策略贡献约束；
  * 同时也可顺势订阅相关策略以静态字段暴露的专属子事件。</p>
  */
 @FunctionalInterface
