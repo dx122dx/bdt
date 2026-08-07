@@ -20,7 +20,8 @@ import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
  *
  * <p>把若干候选键（可含 {@code .} 或 {@code :} 分隔的层级）建成字典树，每次补全只向下钻取
  * <strong>一层</strong>节点（而非一次补全整条深层路径）。配合 Brigadier 的
- * {@link SuggestionsBuilder#createOffset(int)}，只替换正在输入的片段，绝不波及已输入的其它参数。</p>
+ * {@link SuggestionsBuilder#createOffset(int)}，只替换正在输入的片段，绝不波及已输入的其它参数。
+ * 所有偏移统一经 {@code offsetOf} 钳制到合法区间，保证产出的建议区间始终有效。</p>
  *
  * <h2>两种模式</h2>
  * <ul>
@@ -164,7 +165,8 @@ public final class CliCompletion {
                         ? ArgTokenizer.tokenize(remaining.substring(0, tokenStartInRemaining))
                         : new String[0];
                 String lower = frag.toLowerCase(Locale.ROOT);
-                SuggestionsBuilder out = builder.createOffset(builder.getStart() + tokenStartInRemaining);
+                SuggestionsBuilder out = builder.createOffset(
+                        offsetOf(builder, builder.getStart() + tokenStartInRemaining));
                 List<String> candidates = nextProvider.apply(ctx, completed);
                 if (candidates != null) {
                     for (String c : candidates) {
@@ -203,7 +205,7 @@ public final class CliCompletion {
                         String key = token.substring(0, eq);
                         String valFrag = token.substring(eq + 1);
                         SuggestionsBuilder out = builder.createOffset(
-                                builder.getStart() + tokenStartInRemaining + eq + 1);
+                                offsetOf(builder, builder.getStart() + tokenStartInRemaining + eq + 1));
                         String lower = valFrag.toLowerCase(Locale.ROOT);
                         if (valueProvider != null) {
                             List<String> vals = valueProvider.apply(ctx, key);
@@ -226,8 +228,8 @@ public final class CliCompletion {
                 Node node = navigate(root, segments(prefix, separators));
                 if (node == null) return builder.buildFuture();
 
-                SuggestionsBuilder out = builder.createOffset(
-                        builder.getStart() + tokenStartInRemaining + (token.length() - frag.length()));
+                SuggestionsBuilder out = builder.createOffset(offsetOf(builder,
+                        builder.getStart() + tokenStartInRemaining + (token.length() - frag.length())));
                 String lower = frag.toLowerCase(Locale.ROOT);
                 for (Map.Entry<String, Node> e : node.children.entrySet()) {
                     String seg = e.getKey();
@@ -267,6 +269,26 @@ public final class CliCompletion {
             if (Character.isWhitespace(s.charAt(i))) return i;
         }
         return -1;
+    }
+
+    /**
+     * 把期望的建议起始偏移钳制到 Brigadier 允许的合法区间 {@code [builder.getStart(), input.length()]}。
+     *
+     * <p><b>上界 {@code input.length()}</b>：{@link SuggestionsBuilder#suggest} 产出的区间恒为
+     * {@code StringRange.between(start, input.length())}，而 {@code Suggestion.apply} 会执行
+     * {@code input.substring(0, range.getStart())}，{@code start} 超出输入长度即抛
+     * {@link StringIndexOutOfBoundsException}；{@link SuggestionsBuilder#createOffset(int)} 内部的
+     * {@code input.substring(start)} 同样要求不越界。当输入以空白、分隔符或 {@code '='} 结尾时，
+     * 原始偏移计算可能落到输入末尾之后，故必须在调用前钳制。</p>
+     *
+     * <p><b>下界 {@code builder.getStart()}</b>：偏移不得回退到当前参数起点之前，
+     * 否则补全会覆盖前面已解析的命令片段。</p>
+     *
+     * <p>注意：装有 SmartCompletion 等在建议窗口构造期就调用 {@code Suggestion.apply} 的模组时，
+     * 越界不再只是「点选建议才崩」，而是一打开补全窗口即崩，因此该钳制不可省略。</p>
+     */
+    private static int offsetOf(SuggestionsBuilder builder, int desiredOffset) {
+        return Math.max(builder.getStart(), Math.min(desiredOffset, builder.getInput().length()));
     }
 
     private static int lastSep(String s, String seps) {
