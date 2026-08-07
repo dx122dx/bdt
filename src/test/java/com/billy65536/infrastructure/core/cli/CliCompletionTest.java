@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 import com.mojang.brigadier.suggestion.Suggestion;
 import com.mojang.brigadier.suggestion.Suggestions;
@@ -14,19 +13,21 @@ import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * CliCompletion 补全建议回归测试。
+ * CliCompletion 补全建议测试。
  *
- * <p>针对崩溃 {@code StringIndexOutOfBoundsException: Range [0, 83) out of bounds for length 82}：
- * 玩家敲空格触发 {@code set-authorized} 后的配置名补全时，某些模组（如 SmartCompletion）会拦截空格
- * 插入，使「解析期输入串」比「应用期文本」长 1 个尾随空白。原实现把补全偏移算到解析期串末尾，
- * 而 {@link Suggestion#apply(String)} 会对其执行 {@code input.substring(0, range.getStart())} 而越界。
- * 修复：尾随空白存在时把当前片段视为空、偏移锚定到空白之前、补全文本前补一个空格。</p>
+ * <p>覆盖两类关注点：</p>
+ * <ol>
+ *   <li><b>分段部分补全</b>（参考 PartialIdAutocomplete）：同时给出「与输入段数对应的累积前缀」
+ *       与完整键，单子节点自动折叠到分叉层，避免选中中间层却没有前进的空转；</li>
+ *   <li><b>偏移越界崩溃回归</b>：玩家敲空格触发补全时，SmartCompletion 等模组会拦截空格插入，
+ *       使「解析期输入串」比「应用期文本」长 1 个尾随空白，
+ *       {@link Suggestion#apply(String)} 的 {@code input.substring(0, range.getStart())} 因此越界。</li>
+ * </ol>
  *
- * <p>本测试直接驱动生产代码 {@link CliCompletion#hierarchicalProvide} / {@link CliCompletion#positionalProvide}
- * （传入 {@code null} 命令上下文，由测试提供的 source 忽略上下文），并模拟 SmartCompletion 把建议
- * 应用到「缺少尾随空格的文本」上，断言既不抛异常又能产出正确结果。</p>
+ * <p>测试直接驱动生产代码 {@link CliCompletion#hierarchicalProvide} /
+ * {@link CliCompletion#positionalProvide}（命令上下文传 {@code null}，测试用的 source 不读取它）。</p>
  */
-@DisplayName("CliCompletion 补全建议回归")
+@DisplayName("CliCompletion 补全建议")
 class CliCompletionTest {
 
     /** 模拟 SmartCompletion：把触发补全的尾随空格从应用期文本中移除。 */
@@ -37,24 +38,148 @@ class CliCompletionTest {
     }
 
     private static Suggestions buildHierarchical(String input, int start, CliCompletion.Builder b) {
-        SuggestionsBuilder sb = new SuggestionsBuilder(input, start);
-        return CliCompletion.hierarchicalProvide(sb, null, b).join();
+        return CliCompletion.hierarchicalProvide(new SuggestionsBuilder(input, start), null, b).join();
     }
 
     private static Suggestions buildPositional(String input, int start, CliCompletion.Builder b) {
-        SuggestionsBuilder sb = new SuggestionsBuilder(input, start);
-        return CliCompletion.positionalProvide(sb, null, b).join();
+        return CliCompletion.positionalProvide(new SuggestionsBuilder(input, start), null, b).join();
+    }
+
+    /** 注意：Brigadier 会对建议按文本排序，故断言集合内容而非插入顺序。 */
+    private static List<String> textsOf(Suggestions s) {
+        return s.getList().stream().map(Suggestion::getText).toList();
+    }
+
+    private static void assertSameItems(List<String> expected, List<String> actual) {
+        assertEquals(expected.stream().sorted().toList(), actual.stream().sorted().toList());
     }
 
     @Nested
-    @DisplayName("set-authorized 触发补全崩溃（SmartCompletion 移除尾随空格）")
-    class SetAuthorizedCrash {
+    @DisplayName("分段部分补全")
+    class PartialSegments {
+
+        private static final String PREFIX = "/inf dbg action run ";
+
+        private CliCompletion.Builder keys() {
+            return CliCompletion.builder()
+                    .separators(".:/")
+                    .multiple(true)
+                    .keySource(ctx -> List.of(
+                            "inf-dbg:security.config-locker.set-authorized",
+                            "inf-dbg:security.config-locker.clear",
+                            "infrastructure:config"));
+        }
 
         @Test
-        @DisplayName("末尾空格：建议可安全应用于缺少尾随空格的文本，且正确追加带前导空格的条目")
-        void trailingSpaceSafeAgainstShortText() {
+        @DisplayName("单子节点折叠：直接给出分叉那一级，而非逐段空转")
+        void collapsesSingleChildChain() {
+            String input = PREFIX;
+            Suggestions s = buildHierarchical(input, input.length(), keys());
+            List<String> texts = textsOf(s);
+
+            assertTrue(texts.contains("inf-dbg:security.config-locker."),
+                    "inf-dbg 命名空间下唯一链路应折叠到分叉层，实际：" + texts);
+            assertFalse(texts.contains("inf-dbg:"), "中间单子节点不应单独建议：" + texts);
+            assertFalse(texts.contains("inf-dbg:security."), "中间单子节点不应单独建议：" + texts);
+            assertFalse(texts.contains("infrastructure:"),
+                    "只被一个完整键覆盖的部分 id 应隐藏（完整键本身已在建议中）：" + texts);
+            assertTrue(texts.contains("infrastructure:config"), texts.toString());
+        }
+
+        @Test
+        @DisplayName("部分 id 与完整键同时给出，可逐级钻取也可一次选完")
+        void offersBothPartialAndFullKeys() {
+            String input = PREFIX + "inf-dbg:security.";
+            Suggestions s = buildHierarchical(input, PREFIX.length(), keys());
+            List<String> texts = textsOf(s);
+
+            assertTrue(texts.contains("inf-dbg:security.config-locker."), texts.toString());
+            assertTrue(texts.contains("inf-dbg:security.config-locker.set-authorized"), texts.toString());
+            assertTrue(texts.contains("inf-dbg:security.config-locker.clear"), texts.toString());
+            for (Suggestion sug : s.getList()) {
+                assertEquals(PREFIX + sug.getText(), sug.apply(input), "建议应整体替换当前条目");
+            }
+        }
+
+        @Test
+        @DisplayName("已到叶层：只给完整键，不再产出部分 id")
+        void noPartialAtLeafLevel() {
+            String input = PREFIX + "inf-dbg:security.config-locker.";
+            Suggestions s = buildHierarchical(input, PREFIX.length(), keys());
+            assertSameItems(List.of(
+                    "inf-dbg:security.config-locker.set-authorized",
+                    "inf-dbg:security.config-locker.clear"), textsOf(s));
+        }
+
+        @Test
+        @DisplayName("部分 id 恒长于当前输入，保证每次补全都有进展")
+        void partialIdAlwaysAdvances() {
+            for (String typed : List.of("", "inf", "inf-dbg:", "inf-dbg:sec", "inf-dbg:security.")) {
+                String input = PREFIX + typed;
+                Suggestions s = buildHierarchical(input, PREFIX.length(), keys());
+                for (String text : textsOf(s)) {
+                    assertTrue(text.length() > typed.length(),
+                            "输入 '" + typed + "' 的建议 '" + text + "' 未前进");
+                }
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("模糊回退（前缀无命中时按子串匹配）")
+    class FuzzyFallback {
+
+        private static final String PREFIX = "/inf dbg action run ";
+
+        private CliCompletion.Builder keys() {
+            return CliCompletion.builder()
+                    .separators(".:/")
+                    .multiple(true)
+                    .keySource(ctx -> List.of(
+                            "inf-dbg:security.config-locker.set-authorized",
+                            "inf-dbg:security.config-locker.clear",
+                            "infrastructure:config"));
+        }
+
+        @Test
+        @DisplayName("只输入末段即可命中完整键")
+        void tailFragmentMatchesFullKey() {
+            String input = PREFIX + "set-auth";
+            Suggestions s = buildHierarchical(input, PREFIX.length(), keys());
+            assertEquals(List.of("inf-dbg:security.config-locker.set-authorized"), textsOf(s));
+            for (Suggestion sug : s.getList()) {
+                assertEquals(PREFIX + sug.getText(), sug.apply(input), "回退命中也应整体替换当前条目");
+            }
+        }
+
+        @Test
+        @DisplayName("中间片段可命中多个键，不含该子串的键被排除")
+        void middleFragmentMatchesMultiple() {
+            String input = PREFIX + "config-locker";
+            List<String> texts = textsOf(buildHierarchical(input, PREFIX.length(), keys()));
+            assertTrue(texts.contains("inf-dbg:security.config-locker.set-authorized"), texts.toString());
+            assertTrue(texts.contains("inf-dbg:security.config-locker.clear"), texts.toString());
+            assertFalse(texts.contains("infrastructure:config"), texts.toString());
+        }
+
+        @Test
+        @DisplayName("大小写不敏感")
+        void caseInsensitive() {
+            String input = PREFIX + "SET-AUTH";
+            List<String> texts = textsOf(buildHierarchical(input, PREFIX.length(), keys()));
+            assertTrue(texts.contains("inf-dbg:security.config-locker.set-authorized"), texts.toString());
+        }
+    }
+
+    @Nested
+    @DisplayName("尾随空格越界崩溃回归（SmartCompletion 移除尾随空格）")
+    class TrailingSpaceCrash {
+
+        @Test
+        @DisplayName("建议可安全应用于缺少尾随空格的文本，且正确追加带前导空格的条目")
+        void safeAgainstShortText() {
             String input = "/inf dbg action run inf-dbg:security.config-locker.set-authorized ";
-            int start = "/inf dbg action run ".length(); // args 节点起点（剩余部分含尾随空格）
+            int start = "/inf dbg action run ".length();
             CliCompletion.Builder b = CliCompletion.builder()
                     .separators(".:/")
                     .multiple(true)
@@ -64,11 +189,10 @@ class CliCompletionTest {
 
             Suggestions s = buildHierarchical(input, start, b);
             String applyText = dropTrailingWs(input); // SmartCompletion 实际传入 apply 的文本
-
+            assertFalse(s.getList().isEmpty(), "追加新条目时应给出候选");
             for (Suggestion sug : s.getList()) {
                 String applied = assertDoesNotThrow(() -> sug.apply(applyText),
                         "建议应用于缺尾随空格的文本时不应越界");
-                // 正确不变量：应用期文本 + 补全文本（带前导空格）
                 assertEquals(applyText + sug.getText(), applied, "补全结果应为应用期文本拼接补全文本");
                 assertTrue(sug.getText().startsWith(" "), "追加的新条目补全文本应带前导空格");
             }
@@ -84,55 +208,9 @@ class CliCompletionTest {
                     .multiple(true)
                     .keySource(ctx -> List.of("inf-dbg:security.config-locker.set-authorized"));
 
-            Suggestions s = buildHierarchical(input, start, b);
-            for (Suggestion sug : s.getList()) {
+            for (Suggestion sug : buildHierarchical(input, start, b).getList()) {
                 assertDoesNotThrow(() -> sug.apply(input));
             }
-        }
-
-        @Test
-        @DisplayName("assignment + 尾随空格：仍以 '=' 前的键为准补全取值，不崩溃")
-        void assignmentTrailingSpaceIsSafe() {
-            String input = "/inf config set infrastructure:config/foo=";
-            int start = "/inf config set ".length();
-            CliCompletion.Builder b = CliCompletion.builder()
-                    .separators(".:/")
-                    .multiple(true)
-                    .assignment(true)
-                    .keySource(ctx -> List.of("infrastructure:config/foo=bar"))
-                    .valueProvider((ctx, key) -> List.of("true", "false"));
-
-            Suggestions s = buildHierarchical(input, start, b);
-            String applyText = dropTrailingWs(input);
-            for (Suggestion sug : s.getList()) {
-                assertDoesNotThrow(() -> sug.apply(applyText), "assignment 取值补全应用于短文本不应越界");
-            }
-        }
-    }
-
-    @Nested
-    @DisplayName("层级键补全")
-    class Hierarchical {
-
-        @Test
-        @DisplayName("多条路径保留前缀，补全第二条不破坏第一条，且带前导空格")
-        void multiplePaths() {
-            String input = "/inf dbg action run x a:b.c ";
-            int start = "/inf dbg action run x ".length();
-            CliCompletion.Builder b = CliCompletion.builder()
-                    .separators(".:/")
-                    .multiple(true)
-                    .keySource(ctx -> List.of("a:b.c.d", "a:b.c.e", "d:e"));
-
-            Suggestions s = buildHierarchical(input, start, b);
-            String applyText = dropTrailingWs(input);
-            for (Suggestion sug : s.getList()) {
-                String applied = assertDoesNotThrow(() -> sug.apply(applyText));
-                assertEquals(applyText + sug.getText(), applied, "补全结果应为应用期文本拼接补全文本");
-                assertTrue(sug.getText().startsWith(" "), "追加的新条目补全文本应带前导空格");
-            }
-            // 根字典树有 2 个分支（a、d），应给出 2 条候选
-            assertEquals(2, s.getList().size());
         }
 
         @Test
@@ -144,11 +222,48 @@ class CliCompletionTest {
                     .separators(".:/")
                     .keySource(ctx -> List.of("infrastructure:config/someOption"));
 
-            Suggestions s = buildHierarchical(input, start, b);
             String applyText = dropTrailingWs(input);
-            for (Suggestion sug : s.getList()) {
+            for (Suggestion sug : buildHierarchical(input, start, b).getList()) {
                 assertDoesNotThrow(() -> sug.apply(applyText));
             }
+        }
+    }
+
+    @Nested
+    @DisplayName("assignment 取值补全")
+    class Assignment {
+
+        private CliCompletion.Builder builder() {
+            return CliCompletion.builder()
+                    .separators(".:/")
+                    .multiple(true)
+                    .assignment(true)
+                    .keySource(ctx -> List.of("infrastructure:config/foo"))
+                    .valueProvider((ctx, key) -> List.of("true", "false"));
+        }
+
+        @Test
+        @DisplayName("含 '=' 时补全取值，不崩溃")
+        void suggestsValuesAfterEquals() {
+            String input = "/inf config set infrastructure:config/foo=";
+            int start = "/inf config set ".length();
+
+            Suggestions s = buildHierarchical(input, start, builder());
+            assertSameItems(List.of("true", "false"), textsOf(s));
+            for (Suggestion sug : s.getList()) {
+                assertDoesNotThrow(() -> sug.apply(dropTrailingWs(input)));
+            }
+        }
+
+        @Test
+        @DisplayName("完整键追加 '=' 及取值，部分 id 不追加")
+        void appendsEqualsOnlyToFullKeys() {
+            String input = "/inf config set ";
+            List<String> texts = textsOf(buildHierarchical(input, input.length(), builder()));
+            assertSameItems(List.of(
+                    "infrastructure:config/foo=",
+                    "infrastructure:config/foo=true",
+                    "infrastructure:config/foo=false"), texts);
         }
     }
 
@@ -167,11 +282,23 @@ class CliCompletionTest {
 
             Suggestions s = buildPositional(input, start, b);
             String applyText = dropTrailingWs(input);
+            assertEquals(2, s.getList().size());
             for (Suggestion sug : s.getList()) {
                 String applied = assertDoesNotThrow(() -> sug.apply(applyText));
                 assertEquals(applyText + sug.getText(), applied);
                 assertTrue(sug.getText().startsWith(" "));
             }
+        }
+
+        @Test
+        @DisplayName("前缀无命中时回退子串匹配")
+        void fuzzyFallback() {
+            String input = "/mycmd al";
+            int start = "/mycmd ".length();
+            CliCompletion.Builder b = CliCompletion.builder()
+                    .positional((ctx, completed) -> List.of("global", "beta"));
+
+            assertEquals(List.of("global"), textsOf(buildPositional(input, start, b)));
         }
     }
 }
