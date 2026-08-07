@@ -2,7 +2,6 @@ package com.billy65536.infrastructure.security;
 
 import java.util.List;
 
-import com.billy65536.infrastructure.InfrastructureMod;
 import com.billy65536.infrastructure.core.config.ConfigDescriptor;
 import com.billy65536.infrastructure.core.config.ConfigPath;
 import com.billy65536.infrastructure.core.module.IModule;
@@ -39,6 +38,14 @@ import net.minecraft.text.Text;
  */
 public final class SecurityManagerModule implements IModule {
 
+    /**
+     * 模块自身版本，格式 {@code YYYYMMDD.N}（日期 + 当日第几次更新）。
+     *
+     * <p>与宿主模组的 {@code mod_version} 解耦：模块的演进节奏与 infrastructure 整体发版
+     * 无关，改动本模块时手工递增本常量即可，不再随模组元数据漂移。</p>
+     */
+    private static final String VERSION = "20260807.2";
+
     private SecurityConfig config = new SecurityConfig();
 
     @Override
@@ -48,9 +55,7 @@ public final class SecurityManagerModule implements IModule {
 
     @Override
     public String getVersion() {
-        return InfrastructureMod.class.getPackage().getImplementationVersion() != null
-                ? InfrastructureMod.class.getPackage().getImplementationVersion()
-                : "0.1.0";
+        return VERSION;
     }
 
     @Override
@@ -71,21 +76,22 @@ public final class SecurityManagerModule implements IModule {
      */
     @Override
     public void onInitializeModule() {
-        // 1) 先登记执行器（重算推送的目标），再登记策略
+        // 1) 先登记执行器（重算推送的目标）
         SecurityManager.registerExecutor(ConfigLocker.getInstance());
 
-        // 2) 经门户注入本模块默认锁（替代直调执行器）
-        ConfigLockerPolicyConfig cfg = SecurityPortal.newConfigBuilder(ConfigLocker.EXECUTOR_ID)
-                .lock("security", "config", "allowDebugOverride", "false")
-                .lock("security", "config", "allowPolicyOverride", "false")
-                .build();
-        SecurityPortal.injectConfig(ServerOptinPolicy.ID, cfg);
-
-        // 3) 覆盖门控读取本模块配置开关的活引用（锁定时字段被强制为 false）
+        // 2) 覆盖门控读取本模块配置开关的活引用（锁定时字段被强制为 false）
         SecurityManager.setOverrideGate(() -> config.allowPolicyOverride);
 
-        // 4) 框架内置策略
+        // 3) 框架内置策略。必须先于任何 SecurityPortal.injectConfig：
+        //    门户按 id 查已注册策略后再转交静态配置，未注册的策略会被拒绝注入。
         SecurityManager.register(ServerOptinPolicy.INSTANCE);
+
+        // 4) 经门户注入本模块默认锁（替代直调执行器）
+        SecurityPortal.injectConfig(ServerOptinPolicy.ID,
+                ConfigLockerPolicyConfig.builder(ConfigLocker.EXECUTOR_ID)
+                        .lock("security", "config", "allowDebugOverride", "false")
+                        .lock("security", "config", "allowPolicyOverride", "false")
+                        .build());
 
         // 5) 外部 mod 经 "infrastructure:security" entrypoint 贡献的策略
         PolicyPackManager.registerAll();

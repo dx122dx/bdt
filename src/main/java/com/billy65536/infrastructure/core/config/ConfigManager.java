@@ -8,7 +8,8 @@ import java.util.Locale;
 import com.billy65536.infrastructure.core.module.IModule;
 import com.billy65536.infrastructure.core.module.ModuleConfigReflectionAccessor;
 import com.billy65536.infrastructure.core.module.ModuleRegistry;
-import com.billy65536.infrastructure.security.builtin.ConfigLocker;
+import com.billy65536.infrastructure.core.module.ModuleConfigReflectionAccessor.ConfigAccessException;
+import com.billy65536.infrastructure.core.module.ModuleConfigReflectionAccessor.ConfigLockedException;
 
 /**
  * 模块配置统一操作管理器（静态工具）。
@@ -16,6 +17,9 @@ import com.billy65536.infrastructure.security.builtin.ConfigLocker;
  * <p>把「用户可见的完整路径 → 模块 → 描述符 → 字段路径」的解析与读写集中在此，
  * 供命令层（{@code /inf config}）与配置锁定层（{@code ConfigLocker}）共用，
  * 使模块配置访问成为 infrastructure 的通用能力。</p>
+ *
+ * <p>本层<b>不做</b>安全锁定判定：写入类操作一律下沉到
+ * {@link ModuleConfigReflectionAccessor}，锁定门禁在那里统一收口。</p>
  *
  * <p>路径解析规则见 {@link ConfigPath}：完整形态 {@code <module>:<id>/<dot.path>}，
  * 省略形态 {@code <module>:<dot.path>}（段名为默认值 {@code config} 时可省）。
@@ -25,13 +29,6 @@ import com.billy65536.infrastructure.security.builtin.ConfigLocker;
 public final class ConfigManager {
 
     private ConfigManager() {}
-
-    /** 配置访问异常：路径不存在、值格式非法、无无参构造或反射失败。 */
-    public static class ConfigAccessException extends Exception {
-        public ConfigAccessException(String message) {
-            super(message);
-        }
-    }
 
     /**
      * 解析完整路径，返回命中的（模块, 描述符, 字段点分路径）。
@@ -149,17 +146,14 @@ public final class ConfigManager {
     }
 
     /**
-     * 写入字符串值。
-     * @throws ConfigAccessException 路径不存在、格式非法或锁定禁止
+     * 写入字符串值。锁定检查由 {@link ModuleConfigReflectionAccessor#setValue} 统一收口，
+     * 本层不再重复判定。
+     *
+     * @throws ConfigLockedException 路径被安全配置锁定
+     * @throws ConfigAccessException 路径不存在、格式非法
      */
     public static void setValue(ConfigDescriptor descriptor, String dotPath, String raw)
-            throws ConfigAccessException {
-        // 写入前检查服务器锁定：被锁项禁止修改（防命令通道绕过）。
-        String full = ConfigPath.of(descriptor.path().module(), descriptor.path().id(), dotPath).toString();
-        if (ConfigLocker.isLocked(full)) {
-            throw new ConfigAccessException(
-                    "Config '" + full + "' is locked by server policy and cannot be modified");
-        }
+            throws ConfigLockedException, ConfigAccessException {
         try {
             ModuleConfigReflectionAccessor.setValue(descriptor, dotPath, raw);
         } catch (ModuleConfigReflectionAccessor.ConfigAccessException e) {
@@ -168,11 +162,13 @@ public final class ConfigManager {
     }
 
     /**
-     * 重置为默认值。
-     * @throws ConfigAccessException 路径不存在、默认值缺失或锁定禁止
+     * 重置为默认值。锁定检查由 {@link ModuleConfigReflectionAccessor#resetValue} 统一收口。
+     *
+     * @throws ConfigLockedException 路径被安全配置锁定
+     * @throws ConfigAccessException 路径不存在、格式非法
      */
     public static void resetValue(ConfigDescriptor descriptor, String dotPath)
-            throws ConfigAccessException {
+            throws ConfigLockedException, ConfigAccessException {
         try {
             ModuleConfigReflectionAccessor.resetValue(descriptor, dotPath);
         } catch (ModuleConfigReflectionAccessor.ConfigAccessException e) {
@@ -193,18 +189,13 @@ public final class ConfigManager {
     }
 
     /** 解析完整路径并写值（供命令层 set）。 */
-    public static void setValue(String fullPath, String raw) throws ConfigAccessException {
+    public static void setValue(String fullPath, String raw) throws ConfigLockedException, ConfigAccessException {
         Resolved r = resolve(fullPath);
-        // 路径已解析（模块/段/字段均存在），再经锁定检查后写入
-        if (ConfigLocker.isLocked(fullPath)) {
-            throw new ConfigAccessException(
-                    "Config '" + fullPath + "' is locked by server policy and cannot be modified");
-        }
         setValue(r.descriptor, r.dotPath, raw);
     }
 
     /** 解析完整路径并重置（供命令层 reset）。 */
-    public static void resetValue(String fullPath) throws ConfigAccessException {
+    public static void resetValue(String fullPath) throws ConfigLockedException, ConfigAccessException {
         Resolved r = resolve(fullPath);
         resetValue(r.descriptor, r.dotPath);
     }

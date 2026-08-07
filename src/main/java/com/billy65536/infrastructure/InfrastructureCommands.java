@@ -9,6 +9,7 @@ import com.billy65536.infrastructure.core.config.ConfigDescriptor;
 import com.billy65536.infrastructure.core.config.ConfigManager;
 import com.billy65536.infrastructure.core.module.IModule;
 import com.billy65536.infrastructure.core.module.ModuleCommandRegistrar;
+import com.billy65536.infrastructure.core.module.ModuleConfigReflectionAccessor;
 import com.billy65536.infrastructure.core.module.ModuleRegistry;
 import com.billy65536.infrastructure.security.builtin.ConfigLocker;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -128,7 +129,7 @@ public final class InfrastructureCommands {
                     .append(Text.literal(")").formatted(Formatting.DARK_GRAY));
             send(client, out);
             return 1;
-        } catch (ConfigManager.ConfigAccessException e) {
+        } catch (ModuleConfigReflectionAccessor.ConfigAccessException e) {
             send(client, Text.translatable("infrastructure.msg.config_error", fullPath, e.getMessage())
                     .formatted(Formatting.RED));
             return 0;
@@ -152,9 +153,12 @@ public final class InfrastructureCommands {
                                 Text.literal(a.key).formatted(Formatting.GOLD),
                                 Text.literal(String.valueOf(old)).formatted(Formatting.GRAY),
                                 Text.literal(a.value).formatted(Formatting.GREEN)));
-            } catch (ConfigManager.ConfigAccessException e) {
+            } catch (ModuleConfigReflectionAccessor.ConfigAccessException e) {
                 send(client, Text.translatable("infrastructure.msg.config_error",
                                 a.key, e.getMessage()).formatted(Formatting.RED));
+            } catch (ModuleConfigReflectionAccessor.ConfigLockedException e) {
+                send(client, Text.translatable("infrastructure.msg.config_locked",
+                                a.key, e.getViolatedPolicy(), e.getOriginExecutor()).formatted(Formatting.RED));
             }
         }
         if (applied > 0) {
@@ -174,9 +178,13 @@ public final class InfrastructureCommands {
                             Text.literal(String.valueOf(ConfigManager.getValue(fullPath)))
                                     .formatted(Formatting.GREEN)));
             return 1;
-        } catch (ConfigManager.ConfigAccessException e) {
+        } catch (ModuleConfigReflectionAccessor.ConfigAccessException e) {
             send(client, Text.translatable("infrastructure.msg.config_error",
                             fullPath, e.getMessage()).formatted(Formatting.RED));
+            return 0;
+        } catch (ModuleConfigReflectionAccessor.ConfigLockedException e) {
+            send(client, Text.translatable("infrastructure.msg.config_locked",
+                            fullPath, e.getViolatedPolicy(), e.getOriginExecutor()).formatted(Formatting.RED));
             return 0;
         }
     }

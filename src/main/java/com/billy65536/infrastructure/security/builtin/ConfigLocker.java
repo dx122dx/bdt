@@ -176,8 +176,13 @@ public final class ConfigLocker implements ISecurityExecutor {
         return activeConstraints.containsKey(fullPath);
     }
 
-    /** 获取某完整配置路径被强制的值；未锁定返回 null。 */
-    public static String getValueLocked(String fullPath) {
+    /**
+     * 获取某完整配置路径被强制的值；未锁定或「仅锁定无强制值」均返回 null。
+     *
+     * <p>写入侧（{@link ModuleConfigReflectionAccessor#applyLockedValue}）据此自行取值，
+     * 而不由调用方传入——强制值的唯一真相源是本约束表。</p>
+     */
+    public static String getForcedValue(String fullPath) {
         LockConstraint c = activeConstraints.get(fullPath);
         return c == null ? null : c.forcedValue();
     }
@@ -191,71 +196,36 @@ public final class ConfigLocker implements ISecurityExecutor {
         return snap;
     }
 
-    /** 当前是否处于任何锁定之下（约束表非空）。 */
-    public static boolean isAnyLocked() {
-        return !activeConstraints.isEmpty();
-    }
-
     // ==================== 强制值重放 ====================
 
     /**
      * 由配置重载（{@code validatePostLoad}）调用：对给定描述符集合立即强制重放锁定值，
      * 防 GUI / 磁盘绕过。
      *
+     * <p>只遍历路径并筛出被锁项，具体写什么值由
+     * {@link ModuleConfigReflectionAccessor#applyLockedValue} 回查本类的约束表决定。</p>
+     *
      * @param descriptors 模块暴露的配置描述符集合（可为空）
      */
     public static void applyAll(List<ConfigDescriptor> descriptors) {
-        applyAll(currentLockTable(), descriptors);
-    }
-
-    /** 对<b>全部已注册模块</b>重放锁定强制值，使锁定立刻覆盖当前生效的配置（不落盘）。 */
-    public static void applyAllRegistered() {
-        applyAll(currentLockTable(), allRegisteredDescriptors());
-    }
-
-    /** 当前约束表导出的锁定表（完整路径 → 强制值，保留 null value）。 */
-    private static Map<String, String> currentLockTable() {
-        Map<String, String> t = new LinkedHashMap<>();
-        for (LockConstraint c : activeConstraints.values()) {
-            t.put(c.fullPath(), c.forcedValue());
-        }
-        return t;
-    }
-
-    /**
-     * 遍历描述符的字段路径，若完整路径在锁定表中则重放强制值。在快照上遍历，避免长期持锁。
-     */
-    private static void applyAll(Map<String, String> table, List<ConfigDescriptor> descriptors) {
         for (ConfigDescriptor d : descriptors) {
             if (d == null) continue;
             ConfigPath base = d.path();
             for (String dotPath : ConfigManager.listPaths(d)) {
                 String full = ConfigPath.of(base.module(), base.id(), dotPath).toString();
-                if (!table.containsKey(full)) continue;
+                if (!activeConstraints.containsKey(full)) continue;
                 try {
-                    applyLockedValue(d, dotPath, table.get(full));
-                } catch (Exception e) {
+                    ModuleConfigReflectionAccessor.applyLockedValue(d, dotPath);
+                } catch (ModuleConfigReflectionAccessor.ConfigAccessException e) {
                     LOGGER.warn("Failed to apply value to locked config item '{}': {}", full, e.getMessage());
                 }
             }
         }
     }
 
-    /**
-     * 对单个描述符的字段路径重放锁定强制值（不检查锁定状态）。
-     * 锁定值为 null 表示仅锁定无强制值，不写入。
-     *
-     * @return 实际写入的值；仅锁定无强制值时返回 null
-     */
-    public static Object applyLockedValue(ConfigDescriptor descriptor, String dotPath, String forced) {
-        ConfigPath base = descriptor.path();
-        String full = ConfigPath.of(base.module(), base.id(), dotPath).toString();
-        try {
-            return ModuleConfigReflectionAccessor.applyLockedValue(descriptor, dotPath, forced);
-        } catch (ModuleConfigReflectionAccessor.ConfigAccessException e) {
-            LOGGER.warn("Failed to apply locked value to '{}': {}", full, e.getMessage());
-            return null;
-        }
+    /** 对<b>全部已注册模块</b>重放锁定强制值，使锁定立刻覆盖当前生效的配置（不落盘）。 */
+    public static void applyAllRegistered() {
+        applyAll(allRegisteredDescriptors());
     }
 
     /** 汇总全部已注册模块暴露的配置描述符。 */
@@ -291,6 +261,9 @@ public final class ConfigLocker implements ISecurityExecutor {
     /**
      * 把记录的本地原值写回活动配置，并持久化受影响的模块。
      *
+     * <p>调用前相关约束<b>必须已从 {@link #activeConstraints} 移除</b>，否则
+     * {@link ModuleConfigReflectionAccessor#setValue} 的锁定门禁会拒绝写回。</p>
+     *
      * @param originals 完整路径 → 原值字符串；value 为 null 表示当初未能读取，跳过
      * @return 实际还原成功的条目数
      */
@@ -304,12 +277,14 @@ public final class ConfigLocker implements ISecurityExecutor {
             ConfigDescriptor d = ConfigManager.findDescriptorByPath(full);
             if (d == null) continue;
             try {
-                ModuleConfigReflectionAccessor.applyLockedValue(
+                ModuleConfigReflectionAccessor.setValue(
                         d, ConfigManager.dotPathOf(full), e.getValue());
                 restored++;
                 IModule m = ConfigManager.findModuleOfPath(full);
                 if (m != null) dirty.add(m);
             } catch (ModuleConfigReflectionAccessor.ConfigAccessException ex) {
+                LOGGER.warn("Failed to restore local config value for '{}': {}", full, ex.getMessage());
+            } catch (ModuleConfigReflectionAccessor.ConfigLockedException ex) {
                 LOGGER.warn("Failed to restore local config value for '{}': {}", full, ex.getMessage());
             }
         }

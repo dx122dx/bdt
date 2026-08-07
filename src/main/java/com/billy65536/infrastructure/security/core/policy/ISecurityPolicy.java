@@ -69,4 +69,22 @@ public interface ISecurityPolicy {
      * @return 配置片段集合
      */
     Collection<SecurityPolicyConfig> getConfigs();
+
+    /**
+     * 接受一份外部注入的<b>静态</b>配置片段（默认锁等），与本策略已持有的配置合并。
+     *
+     * <p>由 {@link com.billy65536.infrastructure.security.SecurityPortal#injectConfig} 转发，
+     * 是「下游模组声明默认受保护配置」的唯一受控入口。本方法让门户无需认识任何具体的
+     * 配置类型或执行器——类型判定由策略自己完成。</p>
+     *
+     * <p>默认实现拒绝一切注入（返回 {@code false}）：不打算开放静态配置扩展的策略无需实现。
+     * 实现方应自行判定 {@code config} 是否为本策略可承载的形状，不匹配即返回 {@code false}；
+     * 接受后须触发一次 {@link SecurityManager#recompute(Collection)} 使新配置立即生效。</p>
+     *
+     * @param config 待注入的静态配置片段（非 null）
+     * @return {@code true} 表示已接受并合并，{@code false} 表示本策略不接受该配置
+     */
+    default boolean injectStaticConfig(SecurityPolicyConfig config) {
+        return false;
+    }
 }

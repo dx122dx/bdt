@@ -14,10 +14,22 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.billy65536.infrastructure.core.config.ConfigDescriptor;
+import com.billy65536.infrastructure.core.config.ConfigPath;
+import com.billy65536.infrastructure.security.SecurityPolicyViolationException;
+import com.billy65536.infrastructure.security.builtin.ConfigLocker;
 
 /**
  * 通用配置反射访问器，为 {@code /inf config get|set|reset|gui} 与
  * {@code ConfigLocker} 提供支撑。
+ *
+ * <h2>安全门禁</h2>
+ *
+ * <p>本访问器是配置写入的<b>唯一收口</b>，因此锁定检查也落在这里而非上层：
+ * {@link #setValue} 与 {@link #resetValue} 在写入前一律经
+ * {@link ConfigLocker#isLocked(String)} 判定，被锁项抛
+ * {@link ConfigLockedException}。上层（命令 / GUI / 还原流程）无需、也不应重复检查，
+ * 否则既是 WET 又留下漏检通道（历史上 {@code reset} 就因只在命令层检查而可绕过锁定）。
+ * 唯一的合法旁路是 {@link #applyLockedValue}，它只能写入锁定表自身声明的强制值。</p>
  *
  * <p>与 chunkscanner 的 {@code ConfigReflectionAccessor}（硬编码 {@code ChunkScannerConfig.class}）不同，
  * 本访问器<b>基于 {@link ConfigDescriptor}</b>：每个模块通过描述符暴露配置实例，
@@ -47,6 +59,16 @@ public final class ModuleConfigReflectionAccessor {
     public static class ConfigAccessException extends Exception {
         public ConfigAccessException(String message) {
             super(message);
+        }
+    }
+
+        /** 配置写入被安全策略拒绝：目标路径处于 {@link ConfigLocker} 锁定之下。 */
+    public static class ConfigLockedException extends SecurityPolicyViolationException {
+        public ConfigLockedException(String fullPath) {
+            super("Config '" + fullPath + "' is locked by security policy and cannot be modified",
+                "unkown", // TODO 添加安全审计确认来源
+                ConfigLocker.EXECUTOR_ID.toString()
+            );
         }
     }
 
@@ -179,12 +201,14 @@ public final class ModuleConfigReflectionAccessor {
     /**
      * 解析字符串并写入配置实例。
      *
+     * @throws ConfigLockedException 目标路径被安全策略锁定
      * @throws ConfigAccessException 路径不存在、值格式非法、无参构造缺失或反射失败
      */
     public static void setValue(ConfigDescriptor descriptor, String path, String rawValue)
-            throws ConfigAccessException {
+            throws ConfigLockedException, ConfigAccessException {
         Object config = requireConfig(descriptor);
         Field[] chain = requireChain(config, path);
+        requireUnlocked(descriptor, path);
         Field leaf = chain[chain.length - 1];
         write(config, chain, parseValue(leaf.getType(), rawValue, path));
     }
@@ -192,12 +216,14 @@ public final class ModuleConfigReflectionAccessor {
     /**
      * 从默认值快照恢复该路径的值。
      *
+     * @throws ConfigLockedException 目标路径被安全策略锁定
      * @throws ConfigAccessException 路径不存在、默认值缺失、值格式非法或反射失败
      */
     public static void resetValue(ConfigDescriptor descriptor, String path)
-            throws ConfigAccessException {
+            throws ConfigLockedException, ConfigAccessException {
         Object config = requireConfig(descriptor);
         Field[] chain = requireChain(config, path);
+        requireUnlocked(descriptor, path);
         Object pristine = pristineOf(config.getClass());
         Object defaultValue = read(pristine, path);
         if (defaultValue == null && pristine == null) {
@@ -208,28 +234,51 @@ public final class ModuleConfigReflectionAccessor {
     }
 
     /**
-     * 服务器锁定重放：强制写入被锁配置项的锁定值（不检查锁定状态）。
-     * 专供 {@code ConfigLocker} 内部施加 / 重放强制值使用。
+     * 安全锁定的强制值重放：把锁定表为该路径声明的强制值写回活动配置。
      *
-     * <p>强制值约定：{@code forcedValue} 为 {@code null} 表示「仅锁定无强制值」
-     * （不写入，返回 null）；空串 {@code ""} 是合法强制值（会写入空串）。</p>
+     * <p>本方法是锁定门禁的<b>唯一合法旁路</b>，因此刻意<b>不接受</b>调用方传入的值——
+     * 强制值一律由本方法自行经 {@link ConfigLocker#getForcedValue(String)} 回查，
+     * 使「能绕过锁定写入的值」只可能是锁定表自己声明的那个值。</p>
+     *
+     * <p>强制值约定：{@code null} 表示「仅锁定无强制值」（不写入，返回 null）；
+     * 空串 {@code ""} 是合法强制值（会写入空串）。</p>
      *
      * @param descriptor 配置描述符（提供活动实例）
      * @param path       字段点分路径
-     * @param forcedValue 锁定强制值（null = 仅锁定无强制值）
-     * @return 实际写入的值；若仅锁定无强制值（forcedValue 为 null）则返回 null
-     * @throws ConfigAccessException 路径不存在、值格式非法或反射失败
+     * @return 实际写入的值；仅锁定无强制值时返回 null
+     * @throws ConfigAccessException 路径未被锁定、路径不存在、值格式非法或反射失败
      */
-    public static Object applyLockedValue(ConfigDescriptor descriptor, String path, String forcedValue)
+    public static Object applyLockedValue(ConfigDescriptor descriptor, String path)
             throws ConfigAccessException {
         Object config = requireConfig(descriptor);
         Field[] chain = requireChain(config, path);
+        String fullPath = fullPathOf(descriptor, path);
+        if (!ConfigLocker.isLocked(fullPath)) {
+            throw new ConfigAccessException(
+                    "Config '" + fullPath + "' is not locked, there is no forced value to enforce");
+        }
+        String forcedValue = ConfigLocker.getForcedValue(fullPath);
         if (forcedValue == null) {
             return null; // 仅锁定无强制值，不写入
         }
         Object value = parseValue(chain[chain.length - 1].getType(), forcedValue, path);
         write(config, chain, value);
         return value;
+    }
+
+    /** 安全门禁：目标路径处于锁定之下时拒绝写入。 */
+    private static void requireUnlocked(ConfigDescriptor descriptor, String path)
+            throws ConfigLockedException {
+        String fullPath = fullPathOf(descriptor, path);
+        if (ConfigLocker.isLocked(fullPath)) {
+            throw new ConfigLockedException(fullPath);
+        }
+    }
+
+    /** 描述符 + 字段点分路径 → 用户可见的完整配置路径（锁定表的 key 形态）。 */
+    private static String fullPathOf(ConfigDescriptor descriptor, String path) {
+        ConfigPath base = descriptor.path();
+        return ConfigPath.of(base.module(), base.id(), path).toString();
     }
 
     private static Object requireConfig(ConfigDescriptor descriptor) throws ConfigAccessException {

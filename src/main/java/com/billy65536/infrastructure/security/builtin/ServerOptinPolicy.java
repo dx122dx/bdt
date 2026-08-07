@@ -109,13 +109,19 @@ public final class ServerOptinPolicy implements ISecurityPolicy {
     }
 
     /**
-     * 注入一份静态配置片段（默认锁），与既有累积配置合并，并触发重算。
+     * 接受一份静态配置片段（默认锁），与既有累积配置合并并触发重算。
      *
-     * <p>由 {@link com.billy65536.infrastructure.security.SecurityPortal} 在模块初始化时调用。</p>
+     * <p>本策略只承载 {@link ConfigLockerPolicyConfig}（其下辖执行器为 {@link ConfigLocker}），
+     * 其余类型一律拒绝。由 {@link com.billy65536.infrastructure.security.SecurityPortal} 转发。</p>
      */
-    public static void injectStaticConfig(ConfigLockerPolicyConfig config) {
-        staticConfig = (ConfigLockerPolicyConfig) staticConfig.combine(config);
+    @Override
+    public boolean injectStaticConfig(SecurityPolicyConfig config) {
+        if (!(config instanceof ConfigLockerPolicyConfig clc)) {
+            return false;
+        }
+        staticConfig = (ConfigLockerPolicyConfig) staticConfig.combine(clc);
         SecurityManager.recompute(Set.of(ConfigLocker.EXECUTOR_ID));
+        return true;
     }
 
     /**

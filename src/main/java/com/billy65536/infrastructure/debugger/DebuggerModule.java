@@ -3,7 +3,6 @@ package com.billy65536.infrastructure.debugger;
 import java.util.Collection;
 import java.util.List;
 
-import com.billy65536.infrastructure.InfrastructureMod;
 import com.billy65536.infrastructure.core.config.ConfigDescriptor;
 import com.billy65536.infrastructure.core.config.ConfigPath;
 import com.billy65536.infrastructure.core.module.IModule;
@@ -15,7 +14,6 @@ import com.billy65536.infrastructure.debugger.config.FeatureStateStore;
 import com.billy65536.infrastructure.debugger.pack.PackManager;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
@@ -46,11 +44,19 @@ import me.shedaniel.autoconfig.AutoConfig;
  *       持久化到 {@code config/debugger-features.json}，GUI 为独立的特性开关界面。</li>
  * </ul>
  *
- * <p>版本号取自模组元数据（与 infrastructure 一致），无需与 mod_version 手工同步。</p>
+ * <p>版本号为模块<b>独立</b>的日期式版本（{@code YYYYMMDD.N}），与宿主模组的
+ * {@code mod_version} 解耦，改动本模块时手工递增。</p>
  */
 public final class DebuggerModule implements IModule {
 
     private static final String ID = "debugger";
+
+    /**
+     * 模块自身版本，格式 {@code YYYYMMDD.N}（日期 + 当日第几次更新）。
+     *
+     * <p>与宿主模组的 {@code mod_version} 解耦：改动本模块时手工递增本常量。</p>
+     */
+    private static final String VERSION = "20260807.1";
 
     /** 供 Java SPI 实例化；登记由 {@code ModuleRegistry.discover()} 统一触发。 */
     public DebuggerModule() {}
@@ -62,10 +68,7 @@ public final class DebuggerModule implements IModule {
 
     @Override
     public String getVersion() {
-        return FabricLoader.getInstance()
-                .getModContainer(InfrastructureMod.MOD_ID)
-                .map(c -> c.getMetadata().getVersion().getFriendlyString())
-                .orElse("?");
+        return VERSION;
     }
 
     @Override

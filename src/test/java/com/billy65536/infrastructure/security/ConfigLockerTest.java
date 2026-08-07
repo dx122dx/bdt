@@ -14,6 +14,7 @@ import java.util.Map;
 import com.billy65536.infrastructure.core.config.ConfigDescriptor;
 import com.billy65536.infrastructure.core.config.ConfigPath;
 import com.billy65536.infrastructure.core.module.IModule;
+import com.billy65536.infrastructure.core.module.ModuleConfigReflectionAccessor;
 import com.billy65536.infrastructure.core.module.ModuleRegistry;
 import com.billy65536.infrastructure.security.builtin.ConfigLocker;
 import com.billy65536.infrastructure.security.builtin.ConfigLockerPolicyConfig;
@@ -141,7 +142,7 @@ class ConfigLockerTest {
         ConfigLocker.getInstance().onPolicyChanged(ConfigLockerPolicyConfig.empty());
     }
 
-    // ==================== isLocked / getValueLocked 语义 ====================
+    // ==================== isLocked / getForcedValue 语义 ====================
 
     @Nested
     @DisplayName("锁定语义")
@@ -152,7 +153,7 @@ class ConfigLockerTest {
         void unregisteredPath_shouldNotBeLocked() {
             String full = ConfigPath.of(MODULE, SEGMENT, "scanner.maxTasksPerTick").toString();
             assertFalse(ConfigLocker.isLocked(full));
-            assertNull(ConfigLocker.getValueLocked(full));
+            assertNull(ConfigLocker.getForcedValue(full));
         }
 
         @Test
@@ -161,7 +162,7 @@ class ConfigLockerTest {
             applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
 
             assertTrue(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL));
-            assertEquals("false", ConfigLocker.getValueLocked(QSHOP_HIGHLIGHT_FULL));
+            assertEquals("false", ConfigLocker.getForcedValue(QSHOP_HIGHLIGHT_FULL));
         }
 
         @Test
@@ -171,7 +172,7 @@ class ConfigLockerTest {
 
             assertTrue(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL),
                     "value 为 null 时仍应视为锁定，判定依据是 key 是否存在");
-            assertNull(ConfigLocker.getValueLocked(QSHOP_HIGHLIGHT_FULL));
+            assertNull(ConfigLocker.getForcedValue(QSHOP_HIGHLIGHT_FULL));
         }
 
         @Test
@@ -181,7 +182,7 @@ class ConfigLockerTest {
             applyLocks(locks(full, ""));
 
             assertTrue(ConfigLocker.isLocked(full));
-            assertEquals("", ConfigLocker.getValueLocked(full),
+            assertEquals("", ConfigLocker.getForcedValue(full),
                     "空串必须与 null 区分，前者是强制为空值，后者是不强制");
         }
 
@@ -199,7 +200,7 @@ class ConfigLockerTest {
             applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
             applyLocks(locksFull(QSHOP_HIGHLIGHT, "true"));
 
-            assertEquals("true", ConfigLocker.getValueLocked(QSHOP_HIGHLIGHT_FULL));
+            assertEquals("true", ConfigLocker.getForcedValue(QSHOP_HIGHLIGHT_FULL));
         }
 
         @Test
@@ -209,7 +210,7 @@ class ConfigLockerTest {
             applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
 
             assertTrue(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL));
-            assertEquals("false", ConfigLocker.getValueLocked(QSHOP_HIGHLIGHT_FULL));
+            assertEquals("false", ConfigLocker.getForcedValue(QSHOP_HIGHLIGHT_FULL));
         }
 
         @Test
@@ -239,7 +240,7 @@ class ConfigLockerTest {
 
             assertTrue(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL),
                     "进入多人服务器必须默认锁定 QShop 高亮，等待服务端授权");
-            assertEquals("false", ConfigLocker.getValueLocked(QSHOP_HIGHLIGHT_FULL),
+            assertEquals("false", ConfigLocker.getForcedValue(QSHOP_HIGHLIGHT_FULL),
                     "默认强制值应为 false");
         }
 
@@ -272,7 +273,7 @@ class ConfigLockerTest {
             applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
 
             assertTrue(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL));
-            assertEquals("false", ConfigLocker.getValueLocked(QSHOP_HIGHLIGHT_FULL));
+            assertEquals("false", ConfigLocker.getForcedValue(QSHOP_HIGHLIGHT_FULL));
         }
     }
 
@@ -291,7 +292,7 @@ class ConfigLockerTest {
             unlock(QSHOP_HIGHLIGHT_FULL);
 
             assertFalse(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL));
-            assertNull(ConfigLocker.getValueLocked(QSHOP_HIGHLIGHT_FULL));
+            assertNull(ConfigLocker.getForcedValue(QSHOP_HIGHLIGHT_FULL));
         }
 
         @Test
@@ -435,6 +436,83 @@ class ConfigLockerTest {
             config.components.qshop.highlightEnabled = true;
             ConfigLocker.applyAll(List.of(descriptor));
 
+            assertFalse(config.components.qshop.highlightEnabled);
+        }
+    }
+
+    // ==================== 写入门禁（setValue / resetValue） ====================
+
+    @Nested
+    @DisplayName("写入门禁")
+    class WriteGate {
+
+        @Test
+        @DisplayName("被锁路径 setValue 抛 ConfigLockedException 且不改变值")
+        void setValue_lockedPath_shouldBeRejected() {
+            config.components.qshop.highlightEnabled = false;
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
+
+            assertThrows(ModuleConfigReflectionAccessor.ConfigLockedException.class,
+                    () -> ModuleConfigReflectionAccessor.setValue(descriptor, QSHOP_HIGHLIGHT, "true"));
+            assertFalse(config.components.qshop.highlightEnabled, "被拒绝的写入不得落到配置对象上");
+        }
+
+        @Test
+        @DisplayName("被锁路径 resetValue 同样被拒绝（历史上 reset 是绕过通道）")
+        void resetValue_lockedPath_shouldBeRejected() {
+            config.components.qshop.highlightEnabled = true;
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, null)); // 仅锁定，不强制值
+
+            assertThrows(ModuleConfigReflectionAccessor.ConfigLockedException.class,
+                    () -> ModuleConfigReflectionAccessor.resetValue(descriptor, QSHOP_HIGHLIGHT));
+            assertTrue(config.components.qshop.highlightEnabled,
+                    "reset 必须与 set 受同一道门禁约束，否则可重置回默认值绕过锁定");
+        }
+
+        @Test
+        @DisplayName("仅锁定无强制值时写入依然被拒绝（key 存在即锁定）")
+        void setValue_lockedWithoutForcedValue_shouldBeRejected() {
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, null));
+
+            assertThrows(ModuleConfigReflectionAccessor.ConfigLockedException.class,
+                    () -> ModuleConfigReflectionAccessor.setValue(descriptor, QSHOP_HIGHLIGHT, "true"));
+        }
+
+        @Test
+        @DisplayName("未锁路径可正常写入")
+        void setValue_unlockedPath_shouldSucceed() {
+            assertDoesNotThrow(() ->
+                    ModuleConfigReflectionAccessor.setValue(descriptor, QSHOP_HIGHLIGHT, "true"));
+            assertTrue(config.components.qshop.highlightEnabled);
+        }
+
+        @Test
+        @DisplayName("解锁后恢复可写")
+        void setValue_afterUnlock_shouldSucceed() {
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
+            unlock(QSHOP_HIGHLIGHT_FULL);
+
+            assertDoesNotThrow(() ->
+                    ModuleConfigReflectionAccessor.setValue(descriptor, QSHOP_HIGHLIGHT, "true"));
+            assertTrue(config.components.qshop.highlightEnabled);
+        }
+
+        @Test
+        @DisplayName("applyLockedValue 只能作用于被锁路径，不是通用写入后门")
+        void applyLockedValue_unlockedPath_shouldThrow() {
+            assertThrows(ModuleConfigReflectionAccessor.ConfigAccessException.class,
+                    () -> ModuleConfigReflectionAccessor.applyLockedValue(descriptor, QSHOP_HIGHLIGHT));
+        }
+
+        @Test
+        @DisplayName("applyLockedValue 写入的只能是锁定表声明的强制值")
+        void applyLockedValue_shouldWriteForcedValueOnly() throws Exception {
+            config.components.qshop.highlightEnabled = true;
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
+
+            Object written = ModuleConfigReflectionAccessor.applyLockedValue(descriptor, QSHOP_HIGHLIGHT);
+
+            assertEquals(Boolean.FALSE, written);
             assertFalse(config.components.qshop.highlightEnabled);
         }
     }

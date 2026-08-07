@@ -1,8 +1,8 @@
 package com.billy65536.infrastructure.security;
 
 import com.billy65536.infrastructure.InfrastructureMod;
-import com.billy65536.infrastructure.security.builtin.ConfigLockerPolicyConfig;
-import com.billy65536.infrastructure.security.builtin.ServerOptinPolicy;
+import com.billy65536.infrastructure.security.core.policy.ISecurityPolicy;
+import com.billy65536.infrastructure.security.core.policy.SecurityManager;
 import com.billy65536.infrastructure.security.core.policy.SecurityPolicyConfig;
 
 import net.minecraft.util.Identifier;
@@ -10,46 +10,52 @@ import net.minecraft.util.Identifier;
 /**
  * 静态配置注入门户（仅服务静态配置登记，临时补丁不走此处）。
  *
- * <p>外部模组在初始化时经本门户把各自的默认受保护配置（默认锁）注入目标内置策略，
- * 而不直接触碰执行器内部状态。例如 chunkscanner 经
- * {@link #newConfigBuilder(Identifier)} 取得 {@link ConfigLockerPolicyConfig.Builder}，
- * 填好默认锁后 {@link #injectConfig(Identifier, SecurityPolicyConfig)} 注入
- * {@code security:server-optin} 策略。</p>
+ * <p>外部模组在初始化时经本门户把各自的默认受保护配置注入目标策略，而不直接触碰
+ * {@link SecurityManager} 或执行器内部状态。调用方自行用目标执行器的配置类型构造片段，
+ * 例如：</p>
  *
- * <p>本门户只引用 builtin 包类型，不反向依赖下游模组；注入后的累积配置由策略自行持有，
- * 并在 {@link com.billy65536.infrastructure.security.core.policy.SecurityManager} 重算时
- * 合并推送。</p>
+ * <pre>{@code
+ * SecurityPortal.injectConfig(ServerOptinPolicy.ID,
+ *         ConfigLockerPolicyConfig.builder(ConfigLocker.EXECUTOR_ID)
+ *                 .lock("mymod", "config", "some.field", "false")
+ *                 .build());
+ * }</pre>
+ *
+ * <p>门户本身<b>不认识任何具体配置类型</b>：它只把片段转交给目标策略的
+ * {@link ISecurityPolicy#injectStaticConfig(SecurityPolicyConfig)}，由策略判定是否接受。
+ * 因此新增执行器 / 配置形状时无需改动本类。</p>
  */
 public final class SecurityPortal {
 
     private SecurityPortal() {}
 
     /**
-     * 取得指定执行器配置的构造器。
+     * 向指定策略注入一份静态配置片段。
      *
-     * @param executorId 目标执行器 id（如 {@code ConfigLocker.EXECUTOR_ID}）
-     * @return 该执行器类型的配置构造器
-     */
-    public static ConfigLockerPolicyConfig.Builder newConfigBuilder(Identifier executorId) {
-        return ConfigLockerPolicyConfig.builder(executorId);
-    }
-
-    /**
-     * 向指定策略注入一份静态配置片段（默认锁）。
-     *
-     * <p>当前内置策略 {@code security:server-optin} 接受 {@link ConfigLockerPolicyConfig}；
-     * 其他类型暂不支持，会被记录并忽略。</p>
+     * <p>目标策略必须<b>已注册</b>到 {@link SecurityManager}；注入失败只记录警告，
+     * 绝不抛出——安全层的登记失败不应阻断宿主模组的初始化。</p>
      *
      * @param policyId 目标策略 id
      * @param config   静态配置片段
+     * @return {@code true} 表示策略已接受该片段
      */
-    public static void injectConfig(Identifier policyId, SecurityPolicyConfig config) {
-        if (config instanceof ConfigLockerPolicyConfig clc) {
-            ServerOptinPolicy.injectStaticConfig(clc);
-        } else {
-            InfrastructureMod.LOGGER.warn(
-                    "SecurityPortal: no static config sink for policy {} with config type {}",
-                    policyId, config.getClass().getName());
+    public static boolean injectConfig(Identifier policyId, SecurityPolicyConfig config) {
+        if (policyId == null || config == null) {
+            InfrastructureMod.LOGGER.warn("SecurityPortal: null policyId or config, injection ignored");
+            return false;
         }
+        ISecurityPolicy policy = SecurityManager.get(policyId);
+        if (policy == null) {
+            InfrastructureMod.LOGGER.warn(
+                    "SecurityPortal: target policy {} is not registered, injection ignored", policyId);
+            return false;
+        }
+        if (!policy.injectStaticConfig(config)) {
+            InfrastructureMod.LOGGER.warn(
+                    "SecurityPortal: policy {} rejected static config of type {}",
+                    policyId, config.getClass().getName());
+            return false;
+        }
+        return true;
     }
 }
