@@ -57,6 +57,22 @@
     "infrastructure.gui.option.show_action_stack_trace": "显示异常堆栈",
     "infrastructure.gui.option.show_action_stack_trace.desc": "调试动作执行失败时，在聊天栏附加异常堆栈摘要（最多 5 帧）。",
 
+    "infrastructure.gui.composite.title": "Billy's Mod infrastructure — 配置",
+    "infrastructure.gui.composite.category": "模块",
+    "infrastructure.gui.composite.header": "%s  %s",
+    "infrastructure.gui.composite.no_modules": "当前没有任何已注册的模块。",
+    "infrastructure.gui.composite.module_sub": "id：%s  ·  v%s",
+    "infrastructure.gui.composite.no_config": "该模块未暴露任何配置段。",
+    "infrastructure.gui.composite.edit": "编辑",
+
+    "infrastructure.msg.config_composite_opened": "已打开复合配置总览界面。",
+
+    "infrastructure.module.security.name": "安全管理器",
+    "infrastructure.module.security.description": "承载配置锁定层（ConfigLocker）并贡献通用安全默认锁。提供 /inf security status 命令。",
+
+    "infrastructure.command.security.status.empty": "当前没有服务器锁定的配置项。",
+    "infrastructure.command.security.status.header": "服务器锁定的配置项（%s）：",
+
     "text.autoconfig.infrastructure-debugger-config.title": "Billy's Mod infrastructure 设置",
     "text.autoconfig.infrastructure-debugger-config.option.verboseLogging": "详细日志",
     "text.autoconfig.infrastructure-debugger-config.option.verboseLogging.@Tooltip": "输出调试框架的详细日志，包括注册明细与动作执行轨迹。",

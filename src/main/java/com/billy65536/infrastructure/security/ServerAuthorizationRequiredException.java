@@ -1,6 +1,4 @@
-package com.billy65536.infrastructure.core.security.server;
-
-import com.billy65536.infrastructure.core.security.SecurityPolicyViolationException;
+package com.billy65536.infrastructure.security;
 
 /**
  * 服务端授权缺失异常：尝试修改未被服务器授权的危险配置项目时抛出。

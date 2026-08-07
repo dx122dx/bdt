@@ -1,7 +1,8 @@
-package com.billy65536.infrastructure.core.security.server;
+package com.billy65536.infrastructure.security;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -108,6 +109,21 @@ public final class ConfigLocker {
     /** 获取某完整配置路径被服务器强制的值；未锁定返回 null。 */
     public static String getValueLocked(String fullPath) {
         return lockStatus.get(fullPath);
+    }
+
+    /**
+     * 返回当前锁定表的不可变快照（完整路径 → 强制值）。
+     * 供 {@code /inf security status} 等诊断命令安全读取，避免持有内部 Map 引用。
+     */
+    public static Map<String, String> getLockStatusSnapshot() {
+        synchronized (lockStatus) {
+            return new LinkedHashMap<>(lockStatus);
+        }
+    }
+
+    /** 当前是否处于任何服务器锁定之下（锁定表非空）。 */
+    public static boolean isAnyLocked() {
+        return !lockStatus.isEmpty();
     }
 
     /**

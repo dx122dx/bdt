@@ -57,6 +57,22 @@
     "infrastructure.gui.option.show_action_stack_trace": "Show Stack Trace",
     "infrastructure.gui.option.show_action_stack_trace.desc": "Append an exception stack trace summary (up to 5 frames) to chat when a debug action fails.",
 
+    "infrastructure.gui.composite.title": "Billy's Mod infrastructure — Config",
+    "infrastructure.gui.composite.category": "Modules",
+    "infrastructure.gui.composite.header": "%s  %s",
+    "infrastructure.gui.composite.no_modules": "No modules are currently registered.",
+    "infrastructure.gui.composite.module_sub": "id: %s  ·  v%s",
+    "infrastructure.gui.composite.no_config": "This module exposes no config segments.",
+    "infrastructure.gui.composite.edit": "Edit",
+
+    "infrastructure.msg.config_composite_opened": "Opened composite config overview.",
+
+    "infrastructure.module.security.name": "Security Manager",
+    "infrastructure.module.security.description": "Hosts the config lock layer (ConfigLocker) and contributes universal security default locks. Provides /inf security status.",
+
+    "infrastructure.command.security.status.empty": "No server-locked config entries at present.",
+    "infrastructure.command.security.status.header": "Server-locked config entries (%s):",
+
     "text.autoconfig.infrastructure-debugger-config.title": "Billy's Mod infrastructure Settings",
     "text.autoconfig.infrastructure-debugger-config.option.verboseLogging": "Verbose Logging",
     "text.autoconfig.infrastructure-debugger-config.option.verboseLogging.@Tooltip": "Log detailed framework information, including registration details and action execution traces.",

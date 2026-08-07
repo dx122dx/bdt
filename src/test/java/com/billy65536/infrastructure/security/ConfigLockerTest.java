@@ -1,4 +1,4 @@
-package com.billy65536.infrastructure.core.security.server;
+package com.billy65536.infrastructure.security;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

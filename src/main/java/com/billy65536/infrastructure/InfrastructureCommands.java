@@ -10,7 +10,7 @@ import com.billy65536.infrastructure.core.config.ConfigManager;
 import com.billy65536.infrastructure.core.module.IModule;
 import com.billy65536.infrastructure.core.module.ModuleCommandRegistrar;
 import com.billy65536.infrastructure.core.module.ModuleRegistry;
-import com.billy65536.infrastructure.core.security.server.ConfigLocker;
+import com.billy65536.infrastructure.security.ConfigLocker;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -219,15 +219,17 @@ public final class InfrastructureCommands {
      * （段名为默认值 {@code config} 时可省略成 {@code module}）。
      */
     private static int configGui(net.minecraft.client.MinecraftClient client, String target) {
-        ConfigDescriptor descriptor;
+        // 无参数：打开复合配置总览屏（统一入口，等同 ModMenu 的「设置」按钮）
         if (target == null || target.isEmpty()) {
-            descriptor = firstDescriptorWithGui();
-            if (descriptor == null) {
-                send(client, Text.translatable("infrastructure.msg.config_no_gui", "*")
-                        .formatted(Formatting.RED));
-                return 0;
-            }
-        } else {
+            client.execute(() -> client.setScreen(
+                    com.billy65536.infrastructure.core.gui.CompositeConfigScreen.create(
+                            client.currentScreen)));
+            send(client, Text.translatable("infrastructure.msg.config_composite_opened")
+                    .formatted(Formatting.GREEN));
+            return 1;
+        }
+        ConfigDescriptor descriptor;
+        {
             descriptor = ConfigManager.findDescriptorByTarget(target);
             if (descriptor == null) {
                 send(client, Text.translatable("infrastructure.msg.config_target_not_found", target)

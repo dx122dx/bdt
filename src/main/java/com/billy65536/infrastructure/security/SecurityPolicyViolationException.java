@@ -1,4 +1,4 @@
-package com.billy65536.infrastructure.core.security;
+package com.billy65536.infrastructure.security;
 
 /**
  * 安全策略违规异常：任何违背服务器/框架安全策略的操作抛出（如未授权修改被锁配置）。

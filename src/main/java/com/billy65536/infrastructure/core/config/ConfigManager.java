@@ -8,7 +8,7 @@ import java.util.Locale;
 import com.billy65536.infrastructure.core.module.IModule;
 import com.billy65536.infrastructure.core.module.ModuleConfigReflectionAccessor;
 import com.billy65536.infrastructure.core.module.ModuleRegistry;
-import com.billy65536.infrastructure.core.security.server.ConfigLocker;
+import com.billy65536.infrastructure.security.ConfigLocker;
 
 /**
  * 模块配置统一操作管理器（静态工具）。

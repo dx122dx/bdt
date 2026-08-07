@@ -33,6 +33,7 @@ import net.minecraft.util.Identifier;
 public final class InfrastructureMod implements ClientModInitializer {
 
     public static final String MOD_ID = "infrastructure";
+    public static final String NAME = "Billy's Mod infrastructure";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     public static Identifier id(String path) {
