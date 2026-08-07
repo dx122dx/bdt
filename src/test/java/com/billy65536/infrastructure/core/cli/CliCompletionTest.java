@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 import com.mojang.brigadier.suggestion.Suggestion;
 import com.mojang.brigadier.suggestion.Suggestions;
@@ -13,156 +14,163 @@ import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * CliCompletion 建议偏移的回归测试。
+ * CliCompletion 补全建议回归测试。
  *
- * <p>针对崩溃 {@code StringIndexOutOfBoundsException: Range [0, 81) out of bounds for length 80}：
- * 当输入以空白、分隔符或 {@code '='} 结尾时，原实现算出的建议起始偏移可能越过输入串末尾，
- * 使 {@code Suggestion.apply} 在 {@code input.substring(0, range.getStart())} 处抛异常。</p>
+ * <p>针对崩溃 {@code StringIndexOutOfBoundsException: Range [0, 83) out of bounds for length 82}：
+ * 玩家敲空格触发 {@code set-authorized} 后的配置名补全时，某些模组（如 SmartCompletion）会拦截空格
+ * 插入，使「解析期输入串」比「应用期文本」长 1 个尾随空白。原实现把补全偏移算到解析期串末尾，
+ * 而 {@link Suggestion#apply(String)} 会对其执行 {@code input.substring(0, range.getStart())} 而越界。
+ * 修复：尾随空白存在时把当前片段视为空、偏移锚定到空白之前、补全文本前补一个空格。</p>
  *
- * <p>本测试不依赖 Minecraft 运行时：{@code CliCompletion} 产出的 {@code SuggestionProvider} 需要
- * {@code FabricClientCommandSource}，无法在单元测试中构造，因此这里直接验证被修复的不变量本身
- * ——「无论期望偏移多离谱，产出的建议区间都必须落在输入串范围内，且 apply 不抛异常」，
- * 复现方式与生产代码一致：对 {@link SuggestionsBuilder#createOffset(int)} 传入经钳制的偏移。</p>
+ * <p>本测试直接驱动生产代码 {@link CliCompletion#hierarchicalProvide} / {@link CliCompletion#positionalProvide}
+ * （传入 {@code null} 命令上下文，由测试提供的 source 忽略上下文），并模拟 SmartCompletion 把建议
+ * 应用到「缺少尾随空格的文本」上，断言既不抛异常又能产出正确结果。</p>
  */
-@DisplayName("CliCompletion 建议偏移越界回归")
+@DisplayName("CliCompletion 补全建议回归")
 class CliCompletionTest {
 
-    /** 与生产实现 {@code CliCompletion.offsetOf} 等价的钳制逻辑。 */
-    private static int clamp(SuggestionsBuilder builder, int desired) {
-        return Math.max(builder.getStart(), Math.min(desired, builder.getInput().length()));
+    /** 模拟 SmartCompletion：把触发补全的尾随空格从应用期文本中移除。 */
+    private static String dropTrailingWs(String s) {
+        int i = s.length();
+        while (i > 0 && Character.isWhitespace(s.charAt(i - 1))) i--;
+        return s.substring(0, i);
     }
 
-    private static SuggestionsBuilder builderOf(String input, int start) {
-        return new SuggestionsBuilder(input, start);
+    private static Suggestions buildHierarchical(String input, int start, CliCompletion.Builder b) {
+        SuggestionsBuilder sb = new SuggestionsBuilder(input, start);
+        return CliCompletion.hierarchicalProvide(sb, null, b).join();
     }
 
-    @Nested
-    @DisplayName("越界偏移会导致崩溃（问题复现）")
-    class Reproduction {
-
-        @Test
-        @DisplayName("偏移超出输入长度时 createOffset 自身即抛异常")
-        void createOffsetRejectsOutOfBoundsOffset() {
-            String input = "/inf dbg action run inf-dbg:security.config-locker.set-authorized ";
-            SuggestionsBuilder builder = builderOf(input, 20);
-
-            assertThrows(StringIndexOutOfBoundsException.class,
-                    () -> builder.createOffset(input.length() + 1),
-                    "偏移超出输入长度时应当抛出越界异常，这正是线上崩溃的根源");
-        }
+    private static Suggestions buildPositional(String input, int start, CliCompletion.Builder b) {
+        SuggestionsBuilder sb = new SuggestionsBuilder(input, start);
+        return CliCompletion.positionalProvide(sb, null, b).join();
     }
 
     @Nested
-    @DisplayName("钳制后偏移始终合法")
-    class Clamped {
+    @DisplayName("set-authorized 触发补全崩溃（SmartCompletion 移除尾随空格）")
+    class SetAuthorizedCrash {
 
         @Test
-        @DisplayName("末尾空格：remaining 长度叠加后不越界，且能给出全部候选")
-        void trailingSpaceDoesNotOverflow() {
+        @DisplayName("末尾空格：建议可安全应用于缺少尾随空格的文本，且正确追加带前导空格的条目")
+        void trailingSpaceSafeAgainstShortText() {
             String input = "/inf dbg action run inf-dbg:security.config-locker.set-authorized ";
-            int start = "/inf dbg action run inf-dbg:security.config-locker.set-authorized ".length();
-            SuggestionsBuilder builder = builderOf(input, start);
+            int start = "/inf dbg action run ".length(); // args 节点起点（剩余部分含尾随空格）
+            CliCompletion.Builder b = CliCompletion.builder()
+                    .separators(".:/")
+                    .multiple(true)
+                    .keySource(ctx -> List.of(
+                            "infrastructure:config", "chunkscanner:config",
+                            "inf-dbg:security.config-locker.set-authorized"));
 
-            // multiple 模式下 remaining 以空白结尾时，token 为空、tokenStartInRemaining == remaining.length()
-            String remaining = builder.getRemaining();
-            int desired = builder.getStart() + remaining.length();
+            Suggestions s = buildHierarchical(input, start, b);
+            String applyText = dropTrailingWs(input); // SmartCompletion 实际传入 apply 的文本
 
-            SuggestionsBuilder out = assertDoesNotThrow(() -> builder.createOffset(clamp(builder, desired)));
-            out.suggest("infrastructure:config");
-            out.suggest("chunkscanner:config");
-
-            Suggestions suggestions = out.build();
-            assertEquals(2, suggestions.getList().size(), "空片段应给出全部候选");
-            for (Suggestion s : suggestions.getList()) {
-                assertDoesNotThrow(() -> s.apply(input), "apply 不应越界");
+            for (Suggestion sug : s.getList()) {
+                String applied = assertDoesNotThrow(() -> sug.apply(applyText),
+                        "建议应用于缺尾随空格的文本时不应越界");
+                // 正确不变量：应用期文本 + 补全文本（带前导空格）
+                assertEquals(applyText + sug.getText(), applied, "补全结果应为应用期文本拼接补全文本");
+                assertTrue(sug.getText().startsWith(" "), "追加的新条目补全文本应带前导空格");
             }
         }
 
         @Test
-        @DisplayName("末尾分隔符：逐层钻取的偏移合法")
-        void trailingSeparatorIsSafe() {
-            String input = "/inf config set infrastructure:config/";
-            SuggestionsBuilder builder = builderOf(input, "/inf config set ".length());
+        @DisplayName("无尾随空格：正常补全当前片段不崩溃")
+        void noTrailingSpaceIsFine() {
+            String input = "/inf dbg action run inf-dbg:security.config-locker.";
+            int start = "/inf dbg action run ".length();
+            CliCompletion.Builder b = CliCompletion.builder()
+                    .separators(".:/")
+                    .multiple(true)
+                    .keySource(ctx -> List.of("inf-dbg:security.config-locker.set-authorized"));
 
-            String token = builder.getRemaining();
-            String frag = "";
-            int desired = builder.getStart() + (token.length() - frag.length());
-
-            SuggestionsBuilder out = assertDoesNotThrow(() -> builder.createOffset(clamp(builder, desired)));
-            out.suggest("someOption");
-            for (Suggestion s : out.build().getList()) {
-                assertDoesNotThrow(() -> s.apply(input));
-                assertTrue(s.getRange().getStart() <= input.length());
+            Suggestions s = buildHierarchical(input, start, b);
+            for (Suggestion sug : s.getList()) {
+                assertDoesNotThrow(() -> sug.apply(input));
             }
         }
 
         @Test
-        @DisplayName("末尾等号：assignment 取值分支偏移合法")
-        void trailingEqualsIsSafe() {
+        @DisplayName("assignment + 尾随空格：仍以 '=' 前的键为准补全取值，不崩溃")
+        void assignmentTrailingSpaceIsSafe() {
             String input = "/inf config set infrastructure:config/foo=";
-            SuggestionsBuilder builder = builderOf(input, "/inf config set ".length());
+            int start = "/inf config set ".length();
+            CliCompletion.Builder b = CliCompletion.builder()
+                    .separators(".:/")
+                    .multiple(true)
+                    .assignment(true)
+                    .keySource(ctx -> List.of("infrastructure:config/foo=bar"))
+                    .valueProvider((ctx, key) -> List.of("true", "false"));
 
-            String token = builder.getRemaining();
-            int eq = token.indexOf('=');
-            int desired = builder.getStart() + eq + 1;
-
-            SuggestionsBuilder out = assertDoesNotThrow(() -> builder.createOffset(clamp(builder, desired)));
-            out.suggest("true");
-            out.suggest("false");
-            for (Suggestion s : out.build().getList()) {
-                assertDoesNotThrow(() -> s.apply(input));
+            Suggestions s = buildHierarchical(input, start, b);
+            String applyText = dropTrailingWs(input);
+            for (Suggestion sug : s.getList()) {
+                assertDoesNotThrow(() -> sug.apply(applyText), "assignment 取值补全应用于短文本不应越界");
             }
         }
+    }
+
+    @Nested
+    @DisplayName("层级键补全")
+    class Hierarchical {
 
         @Test
-        @DisplayName("多条路径：前面已输入的条目不被覆盖")
-        void multiplePathsPreservePrefix() {
+        @DisplayName("多条路径保留前缀，补全第二条不破坏第一条，且带前导空格")
+        void multiplePaths() {
             String input = "/inf dbg action run x a:b.c ";
             int start = "/inf dbg action run x ".length();
-            SuggestionsBuilder builder = builderOf(input, start);
+            CliCompletion.Builder b = CliCompletion.builder()
+                    .separators(".:/")
+                    .multiple(true)
+                    .keySource(ctx -> List.of("a:b.c.d", "a:b.c.e", "d:e"));
 
-            String remaining = builder.getRemaining(); // "a:b.c "
-            int desired = builder.getStart() + remaining.length();
-
-            SuggestionsBuilder out = builder.createOffset(clamp(builder, desired));
-            out.suggest("d:e");
-
-            List<Suggestion> list = out.build().getList();
-            assertEquals(1, list.size());
-            String applied = list.get(0).apply(input);
-            assertEquals("/inf dbg action run x a:b.c d:e", applied,
-                    "补全第二条路径不应破坏第一条");
+            Suggestions s = buildHierarchical(input, start, b);
+            String applyText = dropTrailingWs(input);
+            for (Suggestion sug : s.getList()) {
+                String applied = assertDoesNotThrow(() -> sug.apply(applyText));
+                assertEquals(applyText + sug.getText(), applied, "补全结果应为应用期文本拼接补全文本");
+                assertTrue(sug.getText().startsWith(" "), "追加的新条目补全文本应带前导空格");
+            }
+            // 根字典树有 2 个分支（a、d），应给出 2 条候选
+            assertEquals(2, s.getList().size());
         }
 
         @Test
-        @DisplayName("钳制不会把偏移压到参数起点之前")
-        void clampRespectsLowerBound() {
-            String input = "/inf config set abc";
+        @DisplayName("末尾分隔符：逐层钻取偏移合法")
+        void trailingSeparatorIsSafe() {
+            String input = "/inf config set infrastructure:config/";
             int start = "/inf config set ".length();
-            SuggestionsBuilder builder = builderOf(input, start);
+            CliCompletion.Builder b = CliCompletion.builder()
+                    .separators(".:/")
+                    .keySource(ctx -> List.of("infrastructure:config/someOption"));
 
-            assertEquals(start, clamp(builder, start - 5),
-                    "下界必须是 builder.getStart()，否则会覆盖已解析的命令片段");
+            Suggestions s = buildHierarchical(input, start, b);
+            String applyText = dropTrailingWs(input);
+            for (Suggestion sug : s.getList()) {
+                assertDoesNotThrow(() -> sug.apply(applyText));
+            }
         }
+    }
+
+    @Nested
+    @DisplayName("位置模式")
+    class Positional {
 
         @Test
-        @DisplayName("任意离谱偏移经钳制后 apply 均安全")
-        void arbitraryOffsetsAreSafe() {
-            String input = "/inf config set infrastructure:config/foo";
-            int start = "/inf config set ".length();
+        @DisplayName("末尾空格追加新参数且不崩溃")
+        void trailingSpaceAppends() {
+            String input = "/mycmd first ";
+            int start = "/mycmd ".length();
+            CliCompletion.Builder b = CliCompletion.builder()
+                    .multiple(true)
+                    .positional((ctx, completed) -> List.of("alpha", "beta"));
 
-            for (int desired = -20; desired <= input.length() + 20; desired++) {
-                SuggestionsBuilder builder = builderOf(input, start);
-                final int d = desired;
-                SuggestionsBuilder out = assertDoesNotThrow(
-                        () -> builder.createOffset(clamp(builder, d)),
-                        "钳制后 createOffset 不应抛异常，desired=" + d);
-                out.suggest("bar");
-                for (Suggestion s : out.build().getList()) {
-                    assertDoesNotThrow(() -> s.apply(input), "apply 不应抛异常，desired=" + d);
-                    assertTrue(s.getRange().getStart() >= 0
-                            && s.getRange().getStart() <= input.length());
-                }
+            Suggestions s = buildPositional(input, start, b);
+            String applyText = dropTrailingWs(input);
+            for (Suggestion sug : s.getList()) {
+                String applied = assertDoesNotThrow(() -> sug.apply(applyText));
+                assertEquals(applyText + sug.getText(), applied);
+                assertTrue(sug.getText().startsWith(" "));
             }
         }
     }

@@ -6,11 +6,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
+import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
@@ -148,119 +150,167 @@ public final class CliCompletion {
 
         // ----- 位置模式 -----
         private SuggestionProvider<FabricClientCommandSource> positionalProvider() {
-            return (ctx, builder) -> {
-                String remaining = builder.getRemaining();
-                String token;
-                int tokenStartInRemaining;
-                if (multiple) {
-                    int ws = lastWhitespace(remaining);
-                    if (ws < 0) { token = remaining; tokenStartInRemaining = 0; }
-                    else { token = remaining.substring(ws + 1); tokenStartInRemaining = ws + 1; }
-                } else {
-                    token = remaining;
-                    tokenStartInRemaining = 0;
-                }
-                String frag = token;
-                String[] completed = (multiple && tokenStartInRemaining > 0)
-                        ? ArgTokenizer.tokenize(remaining.substring(0, tokenStartInRemaining))
-                        : new String[0];
-                String lower = frag.toLowerCase(Locale.ROOT);
-                SuggestionsBuilder out = builder.createOffset(
-                        offsetOf(builder, builder.getStart() + tokenStartInRemaining));
-                List<String> candidates = nextProvider.apply(ctx, completed);
-                if (candidates != null) {
-                    for (String c : candidates) {
-                        if (c != null && c.toLowerCase(Locale.ROOT).startsWith(lower)) {
-                            out.suggest(c);
-                        }
-                    }
-                }
-                return out.buildFuture();
-            };
+            return (ctx, builder) -> positionalProvide(builder, ctx, this);
         }
 
         // ----- 层级模式 -----
         private SuggestionProvider<FabricClientCommandSource> hierarchicalProvider() {
-            return (ctx, builder) -> {
-                Collection<String> keys = keySource.apply(ctx);
-                if (keys == null || keys.isEmpty()) return builder.buildFuture();
-                Node root = buildTrie(keys, separators);
-
-                String remaining = builder.getRemaining();
-                String token;
-                int tokenStartInRemaining;
-                if (multiple) {
-                    int ws = lastWhitespace(remaining);
-                    if (ws < 0) { token = remaining; tokenStartInRemaining = 0; }
-                    else { token = remaining.substring(ws + 1); tokenStartInRemaining = ws + 1; }
-                } else {
-                    token = remaining;
-                    tokenStartInRemaining = 0;
-                }
-
-                // 已含 '='：补全取值
-                if (assignment) {
-                    int eq = token.indexOf('=');
-                    if (eq >= 0) {
-                        String key = token.substring(0, eq);
-                        String valFrag = token.substring(eq + 1);
-                        SuggestionsBuilder out = builder.createOffset(
-                                offsetOf(builder, builder.getStart() + tokenStartInRemaining + eq + 1));
-                        String lower = valFrag.toLowerCase(Locale.ROOT);
-                        if (valueProvider != null) {
-                            List<String> vals = valueProvider.apply(ctx, key);
-                            if (vals != null) {
-                                for (String v : vals) {
-                                    if (v != null && v.toLowerCase(Locale.ROOT).startsWith(lower)) {
-                                        out.suggest(v);
-                                    }
-                                }
-                            }
-                        }
-                        return out.buildFuture();
-                    }
-                }
-
-                // 补全键（向下钻取一层）
-                int lastSep = lastSep(token, separators);
-                String prefix = (lastSep < 0) ? "" : token.substring(0, lastSep + 1);
-                String frag = (lastSep < 0) ? token : token.substring(lastSep + 1);
-                Node node = navigate(root, segments(prefix, separators));
-                if (node == null) return builder.buildFuture();
-
-                SuggestionsBuilder out = builder.createOffset(offsetOf(builder,
-                        builder.getStart() + tokenStartInRemaining + (token.length() - frag.length())));
-                String lower = frag.toLowerCase(Locale.ROOT);
-                for (Map.Entry<String, Node> e : node.children.entrySet()) {
-                    String seg = e.getKey();
-                    Node child = e.getValue();
-                    if (!seg.toLowerCase(Locale.ROOT).startsWith(lower)) continue;
-                    if (child.leaf) {
-                        if (assignment) {
-                            String fullKey = prefix + seg;
-                            out.suggest(seg + "=");
-                            if (valueProvider != null) {
-                                List<String> vals = valueProvider.apply(ctx, fullKey);
-                                if (vals != null) {
-                                    for (String v : vals) {
-                                        if (v != null) out.suggest(seg + "=" + v);
-                                    }
-                                }
-                            }
-                        } else {
-                            out.suggest(seg);
-                        }
-                    } else {
-                        // 内部节点：补全本层并补充分隔符以便继续钻取
-                        out.suggest(seg + (child.outSep != 0 ? child.outSep : ""));
-                    }
-                }
-                return out.buildFuture();
-            };
+            return (ctx, builder) -> hierarchicalProvide(builder, ctx, this);
         }
+
     }
 
     public static Builder builder() { return new Builder(); }
+
+    // ==================== 补全核心逻辑（包级可见，供单元测试直接驱动） ====================
+
+    /**
+     * 位置模式核心逻辑。
+     *
+     * <p>关键修正：{@code remaining} 末尾的空白（通常是玩家敲空格触发补全时遗留）在
+     * 建议被应用的时刻可能已被某些模组（如 SmartCompletion 会拦截空格插入）从文本中移除，
+     * 导致「解析期输入串」比「应用期文本」长 1 个尾随空白。若把补全偏移算到 {@code remaining}
+     * 末尾（即解析期输入串末尾），{@link Suggestion#apply(String)} 会对其执行
+     * {@code input.substring(0, range.getStart())} 而越界崩溃。因此：末尾空白存在时，将当前
+     * 片段视为空、偏移锚定到末尾空白之前，并在补全文本前补一个空格——这样无论应用期文本
+     * 是否含该尾随空白都能正确追加且不越界。</p>
+     */
+    static CompletableFuture<Suggestions> positionalProvide(
+            SuggestionsBuilder builder, CommandContext<FabricClientCommandSource> ctx, Builder b) {
+        String remaining = builder.getRemaining();
+        int trailingWs = countTrailingWs(remaining);
+        int effLen = remaining.length() - trailingWs;
+        String content = remaining.substring(0, effLen);
+        boolean trailingWsPresent = b.multiple && trailingWs > 0;
+
+        String curToken;
+        int curTokenStart;
+        if (trailingWsPresent) {
+            curToken = "";
+            curTokenStart = effLen;
+        } else if (b.multiple) {
+            int ws = lastWhitespace(content);
+            if (ws < 0) { curToken = content; curTokenStart = 0; }
+            else { curToken = content.substring(ws + 1); curTokenStart = ws + 1; }
+        } else {
+            curToken = content; curTokenStart = 0;
+        }
+
+        String frag = curToken;
+        String[] completed = (b.multiple && curTokenStart > 0)
+                ? ArgTokenizer.tokenize(content.substring(0, curTokenStart))
+                : new String[0];
+        String lower = frag.toLowerCase(Locale.ROOT);
+        int offset = builder.getStart() + curTokenStart;
+        SuggestionsBuilder out = builder.createOffset(offsetOf(builder, offset));
+        List<String> candidates = b.nextProvider.apply(ctx, completed);
+        if (candidates != null) {
+            for (String c : candidates) {
+                if (c != null && c.toLowerCase(Locale.ROOT).startsWith(lower)) {
+                    out.suggest(trailingWsPresent ? " " + c : c);
+                }
+            }
+        }
+        return out.buildFuture();
+    }
+
+    /**
+     * 层级模式核心逻辑。与 {@link #positionalProvide} 同样的尾随空白修正。
+     */
+    static CompletableFuture<Suggestions> hierarchicalProvide(
+            SuggestionsBuilder builder, CommandContext<FabricClientCommandSource> ctx, Builder b) {
+        Collection<String> keys = b.keySource.apply(ctx);
+        if (keys == null || keys.isEmpty()) return builder.buildFuture();
+        Node root = buildTrie(keys, b.separators);
+
+        String remaining = builder.getRemaining();
+        int trailingWs = countTrailingWs(remaining);
+        int effLen = remaining.length() - trailingWs;
+        String content = remaining.substring(0, effLen);
+
+        // 当前片段 = content 中最后一个空白分隔片段（尾随空白已去除）
+        String curToken;
+        int curTokenStart;
+        if (b.multiple) {
+            int ws = lastWhitespace(content);
+            if (ws < 0) { curToken = content; curTokenStart = 0; }
+            else { curToken = content.substring(ws + 1); curTokenStart = ws + 1; }
+        } else {
+            curToken = content; curTokenStart = 0;
+        }
+
+        // assignment=true 且当前片段含 '='：补全取值（即使后面跟有触发补全的空格也以 '=' 前的键为准）
+        if (b.assignment) {
+            int eq = curToken.indexOf('=');
+            if (eq >= 0) {
+                String key = curToken.substring(0, eq);
+                String valFrag = curToken.substring(eq + 1);
+                int offset = builder.getStart() + curTokenStart + eq + 1;
+                SuggestionsBuilder out = builder.createOffset(offsetOf(builder, offset));
+                String lower = valFrag.toLowerCase(Locale.ROOT);
+                if (b.valueProvider != null) {
+                    List<String> vals = b.valueProvider.apply(ctx, key);
+                    if (vals != null) {
+                        for (String v : vals) {
+                            if (v != null && v.toLowerCase(Locale.ROOT).startsWith(lower)) {
+                                out.suggest(v);
+                            }
+                        }
+                    }
+                }
+                return out.buildFuture();
+            }
+        }
+
+        // 键补全（向下钻取一层）
+        boolean trailingWsPresent = b.multiple && trailingWs > 0;
+        String token;
+        int tokenStart;
+        if (trailingWsPresent) {
+            token = "";
+            tokenStart = effLen;       // 锚定到末尾空白之前，作为「追加新条目」的起点
+        } else {
+            token = curToken;
+            tokenStart = curTokenStart;
+        }
+
+        int lastSep = lastSep(token, b.separators);
+        String prefix = (lastSep < 0) ? "" : token.substring(0, lastSep + 1);
+        String frag = (lastSep < 0) ? token : token.substring(lastSep + 1);
+        Node node = navigate(root, segments(prefix, b.separators));
+        if (node == null) return builder.buildFuture();
+
+        int offset = builder.getStart() + tokenStart;
+        SuggestionsBuilder out = builder.createOffset(offsetOf(builder, offset));
+        String lower = frag.toLowerCase(Locale.ROOT);
+        boolean lead = trailingWsPresent;
+        for (Map.Entry<String, Node> e : node.children.entrySet()) {
+            String seg = e.getKey();
+            Node child = e.getValue();
+            if (!seg.toLowerCase(Locale.ROOT).startsWith(lower)) continue;
+            if (child.leaf) {
+                if (b.assignment) {
+                    String fullKey = prefix + seg;
+                    out.suggest(lead ? " " + seg + "=" : seg + "=");
+                    if (b.valueProvider != null) {
+                        List<String> vals = b.valueProvider.apply(ctx, fullKey);
+                        if (vals != null) {
+                            for (String v : vals) {
+                                if (v != null) out.suggest(lead ? " " + seg + "=" + v : seg + "=" + v);
+                            }
+                        }
+                    }
+                } else {
+                    out.suggest(lead ? " " + seg : seg);
+                }
+            } else {
+                // 内部节点：补全本层并补充分隔符以便继续钻取
+                out.suggest(lead ? " " + seg + (child.outSep != 0 ? child.outSep : "")
+                                : seg + (child.outSep != 0 ? child.outSep : ""));
+            }
+        }
+        return out.buildFuture();
+    }
 
     // ==================== 工具方法 ====================
 
@@ -269,6 +319,13 @@ public final class CliCompletion {
             if (Character.isWhitespace(s.charAt(i))) return i;
         }
         return -1;
+    }
+
+    /** 统计字符串末尾连续空白字符的个数（用于识别「触发补全的尾随空格」）。 */
+    private static int countTrailingWs(String s) {
+        int c = 0;
+        for (int i = s.length() - 1; i >= 0 && Character.isWhitespace(s.charAt(i)); i--) c++;
+        return c;
     }
 
     /**
