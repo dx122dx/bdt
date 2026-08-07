@@ -11,6 +11,7 @@ import com.billy65536.infrastructure.core.module.IModule;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.text.Text;
 
 /**
@@ -63,6 +64,17 @@ public final class SecurityManagerModule implements IModule {
     public void onInitializeModule() {
         // 注册基础设施自带的通用安全默认锁。下游模组亦可调用同一 API 追加各自默认锁。
         ConfigLocker.registerDefaultLocks("security", DEFAULT_LOCKS);
+        // 集中接管「服务端 opt-in」配置锁定的进入/退出生命周期：各模块只需登记默认锁
+        // （registerDefaultLocks），无需各自监听连接事件。仅进入多人服务器（非单人/局域网）
+        // 时锁定全部受保护项，等待服务器授权信号；退出时统一释放锁定。
+        ClientPlayConnectionEvents.JOIN.register((connection, sender, client) -> {
+            if (client.getCurrentServerEntry() != null && !client.isIntegratedServerRunning()) {
+                ConfigLocker.enterServerLock();
+            }
+        });
+        ClientPlayConnectionEvents.DISCONNECT.register((connection, client) -> {
+            ConfigLocker.leaveServerLock();
+        });
     }
 
     @Override

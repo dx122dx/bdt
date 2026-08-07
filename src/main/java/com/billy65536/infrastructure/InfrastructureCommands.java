@@ -247,16 +247,6 @@ public final class InfrastructureCommands {
         return 0;
     }
 
-    /** 全部模块中第一个含 GUI 回调的配置段；无则返回 null。 */
-    private static ConfigDescriptor firstDescriptorWithGui() {
-        for (IModule m : ModuleRegistry.getAll()) {
-            for (ConfigDescriptor d : m.getConfigDescriptors()) {
-                if (d.openGui() != null) return d;
-            }
-        }
-        return null;
-    }
-
     /** set/reset 后持久化：按路径定位模块并 saveConfig。 */
     private static void saveModuleOfPath(net.minecraft.client.MinecraftClient client, String fullPath) {
         IModule m = ConfigManager.findModuleOfPath(fullPath);
