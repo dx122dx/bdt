@@ -17,6 +17,7 @@ import com.billy65536.infrastructure.security.core.policy.ActivationTrigger;
 import com.billy65536.infrastructure.security.core.policy.ISecurityExecutor;
 import com.billy65536.infrastructure.security.core.policy.ISecurityPolicy;
 import com.billy65536.infrastructure.security.core.policy.SecurityConfigPatch;
+import com.billy65536.infrastructure.security.SecurityPortal;
 import com.billy65536.infrastructure.security.core.policy.SecurityManager;
 import com.billy65536.infrastructure.security.core.policy.SecurityPolicyConfig;
 
@@ -69,7 +70,7 @@ class PolicyOverrideTest {
     /** 注册一个 MANUAL 触发的策略并立即激活。 */
     private MapPolicy registerActive(Identifier policyId, SecurityPolicyConfig... configs) {
         MapPolicy policy = new MapPolicy(policyId, List.of(configs));
-        SecurityManager.register(policy);
+        SecurityPortal.registerPolicy(reg -> reg.register(policy));
         SecurityManager.setActive(policyId, true);
         activated.add(policyId);
         return policy;
@@ -78,7 +79,7 @@ class PolicyOverrideTest {
     /** 注册一个记录型执行器。 */
     private static RecordingExecutor registerExecutor(Identifier executorId) {
         RecordingExecutor ex = new RecordingExecutor(executorId, false);
-        SecurityManager.registerExecutor(ex);
+        SecurityPortal.registerExecutor(reg -> reg.register(ex));
         return ex;
     }
 
@@ -333,7 +334,7 @@ class PolicyOverrideTest {
             Identifier badId = nextId("executor");
             Identifier goodId = nextId("executor");
             RecordingExecutor bad = new RecordingExecutor(badId, true);
-            SecurityManager.registerExecutor(bad);
+            SecurityPortal.registerExecutor(reg -> reg.register(bad));
             RecordingExecutor good = registerExecutor(goodId);
 
             Identifier policyId = nextId("policy");

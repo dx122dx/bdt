@@ -1,61 +1,83 @@
 package com.billy65536.infrastructure.security;
 
-import com.billy65536.infrastructure.InfrastructureMod;
-import com.billy65536.infrastructure.security.core.policy.ISecurityPolicy;
-import com.billy65536.infrastructure.security.core.policy.SecurityManager;
-import com.billy65536.infrastructure.security.core.policy.SecurityPolicyConfig;
+import java.util.function.Consumer;
 
-import net.minecraft.util.Identifier;
+import com.billy65536.infrastructure.security.api.ConfigInjector;
+import com.billy65536.infrastructure.security.api.ExecutorRegistrar;
+import com.billy65536.infrastructure.security.api.PolicyRegistrar;
+import com.billy65536.infrastructure.security.core.policy.RegistrationCoordinator;
 
 /**
- * 静态配置注入门户（仅服务静态配置登记，临时补丁不走此处）。
+ * 安全框架对外的<b>唯一</b>注册门户。
  *
- * <p>外部模组在初始化时经本门户把各自的默认受保护配置注入目标策略，而不直接触碰
- * {@link SecurityManager} 或执行器内部状态。调用方自行用目标执行器的配置类型构造片段，
- * 例如：</p>
+ * <p>外部模组（经 {@code infrastructure:security} entrypoint）与框架内置模块都只通过本类登记
+ * 执行器 / 策略 / 静态配置，<b>绝不直接</b>触碰 {@code SecurityManager}：注册与注入的时序由本类
+ * 与 {@link RegistrationCoordinator} 统一编排，外部无需关心登记顺序，也不会再出现
+ * 「注册时找不到对应 Policy / Executor」的时序混乱。</p>
+ *
+ * <h2>用法</h2>
  *
  * <pre>{@code
- * SecurityPortal.injectConfig(ServerOptinPolicy.ID,
- *         ConfigLockerPolicyConfig.builder(ConfigLocker.EXECUTOR_ID)
- *                 .lock("mymod", "config", "some.field", "false")
- *                 .build());
+ * // 登记执行器
+ * SecurityPortal.registerExecutor(reg -> reg.register(myExecutor));
+ *
+ * // 登记策略
+ * SecurityPortal.registerPolicy(reg -> reg.register(myPolicy));
+ *
+ * // 向某策略注入静态配置（默认锁等）；可在一次调用内注入多份
+ * SecurityPortal.injectConfig(inj -> {
+ *     inj.inject(ServerOptinPolicy.ID, ConfigLockerPolicyConfig.builder(ConfigLocker.EXECUTOR_ID)
+ *             .lock("mymod", "config", "some.field", "false").build());
+ * });
  * }</pre>
  *
- * <p>门户本身<b>不认识任何具体配置类型</b>：它只把片段转交给目标策略的
- * {@link ISecurityPolicy#injectStaticConfig(SecurityPolicyConfig)}，由策略判定是否接受。
- * 因此新增执行器 / 配置形状时无需改动本类。</p>
+ * <p>执行器与策略<b>即时</b>登记（二者无相互依赖顺序要求）；静态配置注入<b>缓冲</b>，
+ * 由框架宿主在收集完所有贡献后调用 {@link #apply()} 统一物化——此时全部策略 / 执行器必然已登记。</p>
  */
 public final class SecurityPortal {
 
     private SecurityPortal() {}
 
     /**
-     * 向指定策略注入一份静态配置片段。
+     * 登记一个安全执行器。
      *
-     * <p>目标策略必须<b>已注册</b>到 {@link SecurityManager}；注入失败只记录警告，
-     * 绝不抛出——安全层的登记失败不应阻断宿主模组的初始化。</p>
-     *
-     * @param policyId 目标策略 id
-     * @param config   静态配置片段
-     * @return {@code true} 表示策略已接受该片段
+     * @param action 接收 {@link ExecutorRegistrar}，在其内部调用 {@code register(executor)}
      */
-    public static boolean injectConfig(Identifier policyId, SecurityPolicyConfig config) {
-        if (policyId == null || config == null) {
-            InfrastructureMod.LOGGER.warn("SecurityPortal: null policyId or config, injection ignored");
-            return false;
-        }
-        ISecurityPolicy policy = SecurityManager.get(policyId);
-        if (policy == null) {
-            InfrastructureMod.LOGGER.warn(
-                    "SecurityPortal: target policy {} is not registered, injection ignored", policyId);
-            return false;
-        }
-        if (!policy.injectStaticConfig(config)) {
-            InfrastructureMod.LOGGER.warn(
-                    "SecurityPortal: policy {} rejected static config of type {}",
-                    policyId, config.getClass().getName());
-            return false;
-        }
-        return true;
+    public static void registerExecutor(Consumer<ExecutorRegistrar> action) {
+        ExecutorRegistrar reg = executor -> RegistrationCoordinator.registerExecutorNow(executor);
+        action.accept(reg);
+    }
+
+    /**
+     * 登记一个安全策略。
+     *
+     * @param action 接收 {@link PolicyRegistrar}，在其内部调用 {@code register(policy)}
+     */
+    public static void registerPolicy(Consumer<PolicyRegistrar> action) {
+        PolicyRegistrar reg = policy -> RegistrationCoordinator.registerPolicyNow(policy);
+        action.accept(reg);
+    }
+
+    /**
+     * 向指定策略注入一份或多份静态配置片段（默认锁等）。
+     *
+     * <p>注入被<b>缓冲</b>，直到 {@link #apply()} 统一物化；缓冲期内即使目标策略尚未登记也不会
+     * 失败，因为物化发生在全部策略登记之后。目标策略缺失或拒绝注入只记警告。</p>
+     *
+     * @param action 接收 {@link ConfigInjector}，在其内部调用 {@code inject(policyId, config)}
+     */
+    public static void injectConfig(Consumer<ConfigInjector> action) {
+        ConfigInjector inj = (policyId, config) -> RegistrationCoordinator.enqueueInjection(policyId, config);
+        action.accept(inj);
+    }
+
+    /**
+     * 统一物化全部缓冲的静态配置注入。
+     *
+     * <p>必须在所有执行器 / 策略登记完成后调用一次，由框架宿主（{@code SecurityManagerModule}）
+     * 在 {@code PolicyPackManager.registerAll()} 之后调用。重复调用为空操作。</p>
+     */
+    static void apply() {
+        RegistrationCoordinator.apply();
     }
 }

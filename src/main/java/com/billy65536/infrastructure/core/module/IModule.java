@@ -73,7 +73,8 @@ public interface IModule {
      *
      * <p>含危险配置项（server-lock 强制值）的模块，应把对应描述符标记为
      * {@code dangerous}，并在模块初始化时调
-     * {@code SecurityPortal.injectConfig(...)} 注册默认锁定值。</p>
+     * {@code SecurityPortal.injectConfig(inj -> inj.inject(policyId, config))}
+     * 经门户缓冲、由框架宿主统一物化注册默认锁定值。</p>
      */
     default List<ConfigDescriptor> getConfigDescriptors() {
         return List.of();

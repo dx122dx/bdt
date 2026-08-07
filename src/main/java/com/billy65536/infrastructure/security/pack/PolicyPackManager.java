@@ -57,6 +57,12 @@ public final class PolicyPackManager {
      * 注册全部策略包：先合并框架内置包与外部 mod 经 entrypoint 注入的包，
      * 再逐包判定目标模组是否加载，已加载才调用其注册入口。
      *
+     * <p>各包的注册入口统一经 {@link SecurityPortal} 登记执行器 / 策略 / 注入静态配置：
+     * 执行器与策略<b>即时</b>生效，静态配置注入则被 {@link SecurityPortal} <b>缓冲</b>，
+     * 由框架宿主（{@code SecurityManagerModule}）在 {@code registerAll()} 之后调用
+     * {@link SecurityPortal#apply()} 统一物化。因此各包之间<b>无需</b>关心登记先后，
+     * 也不会再出现「注册时找不到对应 Policy / Executor」的时序混乱。</p>
+     *
      * <p>异常隔离分两级，均捕获任意 {@link Throwable}（含 {@link NoClassDefFoundError}、
      * {@link LinkageError} 等类加载期错误）：收集阶段单个 provider 抛异常，只丢失该
      * provider 的全部策略包；注册阶段单个包抛异常，只跳过该包。两级都绝不阻断模组

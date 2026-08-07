@@ -76,27 +76,30 @@ public final class SecurityManagerModule implements IModule {
      */
     @Override
     public void onInitializeModule() {
-        // 1) 先登记执行器（重算推送的目标）
-        SecurityManager.registerExecutor(ConfigLocker.getInstance());
+        // 1) 登记内置执行器（即时生效，作为重算推送的目标）
+        SecurityPortal.registerExecutor(reg -> reg.register(ConfigLocker.getInstance()));
 
-        // 2) 覆盖门控读取本模块配置开关的活引用（锁定时字段被强制为 false）
+        // 2) 覆盖门控读取本模块配置开关的活引用（锁定时字段被强制为 false）；
+        //    必须早于 apply()，否则物化重算时门控尚未生效
         SecurityManager.setOverrideGate(() -> config.allowPolicyOverride);
 
-        // 3) 框架内置策略。必须先于任何 SecurityPortal.injectConfig：
-        //    门户按 id 查已注册策略后再转交静态配置，未注册的策略会被拒绝注入。
-        SecurityManager.register(ServerOptinPolicy.INSTANCE);
+        // 3) 登记框架内置策略（即时生效）
+        SecurityPortal.registerPolicy(reg -> reg.register(ServerOptinPolicy.INSTANCE));
 
-        // 4) 经门户注入本模块默认锁（替代直调执行器）
-        SecurityPortal.injectConfig(ServerOptinPolicy.ID,
+        // 4) 经门户注入本模块默认锁（缓冲，待 apply 统一物化）
+        SecurityPortal.injectConfig(inj -> inj.inject(ServerOptinPolicy.ID,
                 ConfigLockerPolicyConfig.builder(ConfigLocker.EXECUTOR_ID)
                         .lock("security", "config", "allowDebugOverride", "false")
                         .lock("security", "config", "allowPolicyOverride", "false")
-                        .build());
+                        .build()));
 
-        // 5) 外部 mod 经 "infrastructure:security" entrypoint 贡献的策略
+        // 5) 外部 mod 经 "infrastructure:security" entrypoint 贡献的策略（同样经门户缓冲）
         PolicyPackManager.registerAll();
 
-        // 6) 唯一的连接事件监听：按 trigger 集中判定
+        // 6) 统一物化全部缓冲的静态配置注入；此刻所有策略 / 执行器必然已登记
+        SecurityPortal.apply();
+
+        // 7) 唯一的连接事件监听：按 trigger 集中判定
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             if (isRemoteServer(client)) {
                 applyTrigger(ActivationTrigger.MULTIPLAYER_JOIN, true);

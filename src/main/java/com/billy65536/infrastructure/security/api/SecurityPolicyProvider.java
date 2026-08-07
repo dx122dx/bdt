@@ -19,9 +19,9 @@ package com.billy65536.infrastructure.security.api;
  * }</pre>
  *
  * <p>注册入口内部即可通过
- * {@link com.billy65536.infrastructure.security.core.policy.SecurityManager#register}
+ * {@link com.billy65536.infrastructure.security.SecurityPortal#registerPolicy}
  * 注册全新策略，或经
- * {@link com.billy65536.infrastructure.security.SecurityPortal}
+ * {@link com.billy65536.infrastructure.security.SecurityPortal#injectConfig}
  * 向内置策略贡献默认锁约束；
  * 同时也可顺势订阅相关策略以静态字段暴露的专属子事件。</p>
  */

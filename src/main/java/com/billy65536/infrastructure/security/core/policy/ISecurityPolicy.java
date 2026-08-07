@@ -14,8 +14,8 @@ import net.minecraft.util.Identifier;
  *
  * <p>外部模组通过
  * {@link com.billy65536.infrastructure.security.api.SecurityPolicyProvider} 扩展点
- * 贡献自己的策略，经 {@link SecurityManager#register(ISecurityPolicy)} 注册后即可由
- * {@code /inf security list|status|info|active|deactive} 查询与操控。</p>
+ * 贡献自己的策略，经 {@link com.billy65536.infrastructure.security.SecurityPortal#registerPolicy}
+ * 登记后即可由 {@code /inf security list|status|info|active|deactive} 查询与操控。</p>
  *
  * <h2>被动性</h2>
  *

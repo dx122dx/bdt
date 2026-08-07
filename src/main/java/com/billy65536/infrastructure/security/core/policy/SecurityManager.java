@@ -70,9 +70,13 @@ public final class SecurityManager {
      * <p>注册时按 {@link com.billy65536.infrastructure.security.core.policy.ActivationTrigger#ALWAYS}
      * 决定是否立即激活；其余触发条件的策略初始为未激活，等待框架判定或手动开关。</p>
      *
+     * <p><b>包级私有</b>：外部模组不得直接调用本方法，统一经
+     * {@link com.billy65536.infrastructure.security.SecurityPortal#registerPolicy} 登记，
+     * 由框架保证时序。</p>
+     *
      * @param policy 策略实例，null 或 id 为 null 时忽略并告警
      */
-    public static void register(ISecurityPolicy policy) {
+    static void register(ISecurityPolicy policy) {
         if (policy == null || policy.getId() == null) {
             InfrastructureMod.LOGGER.warn(
                     "Attempted to register null security policy or policy with null ID, ignored");
@@ -93,8 +97,13 @@ public final class SecurityManager {
         }
     }
 
-    /** 注册一个安全执行器（独立于策略，供重算时按 id 推送配置）。 */
-    public static void registerExecutor(ISecurityExecutor executor) {
+    /**
+     * 注册一个安全执行器（独立于策略，供重算时按 id 推送配置）。
+     *
+     * <p><b>包级私有</b>：外部模组不得直接调用本方法，统一经
+     * {@link com.billy65536.infrastructure.security.SecurityPortal#registerExecutor} 登记。</p>
+     */
+    static void registerExecutor(ISecurityExecutor executor) {
         if (executor == null || executor.getId() == null) {
             InfrastructureMod.LOGGER.warn(
                     "Attempted to register null security executor or executor with null ID, ignored");
