@@ -12,14 +12,14 @@ import net.fabricmc.fabric.api.event.EventFactory;
  * <p>这里只放与「策略启停」本身相关的通用事件；策略各自的业务子事件由策略以
  * {@code public static final Event<XxxCallback>} 字段自行暴露，不在此集中登记
  * （参见
- * {@link com.billy65536.infrastructure.security.policy.ServerOptinPolicy#LOCKS_APPLIED}）。</p>
+ * {@link com.billy65536.infrastructure.security.builtin.ServerOptinPolicy#LOCKS_APPLIED}）。</p>
  *
  * <p>事件复用 Fabric 的 {@link EventFactory#createArrayBacked}：其实现基于数组快照 +
  * 无锁遍历，回调触发不产生迭代器分配，是 MC 生态的标准做法。</p>
  *
  * <p>无论策略是被框架自动判定启停，还是被
  * {@code /inf security active|deactive} 手动切换，都会触发这里的事件——二者共用
- * {@link com.billy65536.infrastructure.security.core.policy.PolicyRegistry#setActive}
+ * {@link com.billy65536.infrastructure.security.core.policy.SecurityManager#setActive}
  * 这一条通路。</p>
  */
 public final class SecurityEvents {

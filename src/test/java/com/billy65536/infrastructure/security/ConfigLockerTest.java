@@ -1,18 +1,27 @@
 package com.billy65536.infrastructure.security;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import com.billy65536.infrastructure.core.config.ConfigDescriptor;
 import com.billy65536.infrastructure.core.config.ConfigPath;
-import com.billy65536.infrastructure.security.policy.server_optin.ConfigLocker;
+import com.billy65536.infrastructure.core.module.IModule;
+import com.billy65536.infrastructure.core.module.ModuleRegistry;
+import com.billy65536.infrastructure.security.builtin.ConfigLocker;
+import com.billy65536.infrastructure.security.builtin.ConfigLockerPolicyConfig;
+
+import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
+import net.minecraft.text.Text;
+
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -30,14 +39,15 @@ import static org.junit.jupiter.api.Assertions.*;
  * 模块 {@code chunkscanner} + 段 {@code config} 为例，字段路径沿用原 QShop 高亮项。
  * 配置对象用本地简单 POJO {@link TestConfig}（无需引入 chunkscanner）。</p>
  *
- * <p><b>静态状态隔离</b>：{@code lockStatus} 是静态 Map，用例间会互相污染，
- * 每个用例前后都通过 {@link ConfigLocker#leaveServerLock()} 显式清空。</p>
+ * <p><b>状态隔离</b>：{@code activeConstraints} 是静态 Map，用例间会互相污染，
+ * 每个用例前后都通过 {@link #clearLocks()} 显式清空；并通过注册 {@link TestModule}
+ * 使 {@code readCurrent / restoreOriginals / applyAllRegistered} 能解析到描述符，
+ * 从而真实验证「原值快照」与「还原」行为。</p>
  */
 @DisplayName("ConfigLocker")
 class ConfigLockerTest {
 
-    /** 测试用配置对象：嵌套结构与 chunkscanner 的 components.qshop.highlightEnabled 对齐，
-     *  使反射索引返回的点分路径与登记锁定时使用的逻辑路径一致（否则 applyAll 路径不匹配）。 */
+    /** 测试用配置对象：嵌套结构与 chunkscanner 的 components.qshop.highlightEnabled 对齐。 */
     public static class Components {
         public QShop qshop = new QShop();
     }
@@ -60,17 +70,8 @@ class ConfigLockerTest {
     private static final String QSHOP_HIGHLIGHT_FULL =
             ConfigPath.of(MODULE, SEGMENT, QSHOP_HIGHLIGHT).toString();
 
-    /** 构造一个可变锁定映射（Map.of 不允许 null value）。 */
-    private static Map<String, String> locks(String key, String value) {
-        Map<String, String> m = new HashMap<>();
-        m.put(key, value);
-        return m;
-    }
-
-    /** 用纯字段路径构造完整路径的锁定映射。 */
-    private static Map<String, String> locksFull(String dotPath, String value) {
-        return locks(ConfigPath.of(MODULE, SEGMENT, dotPath).toString(), value);
-    }
+    /** 持有当前描述符的测试模块（注册到 ModuleRegistry 以便路径解析）。 */
+    private static final TestModule MODULE_INSTANCE = new TestModule();
 
     /** 当前测试配置实例（每个用例新建，避免污染）。 */
     private TestConfig config;
@@ -78,20 +79,66 @@ class ConfigLockerTest {
     /** 持有配置实例的描述符（供 applyAll）。 */
     private ConfigDescriptor descriptor;
 
+    @BeforeAll
+    static void registerModule() {
+        ModuleRegistry.register(MODULE_INSTANCE);
+    }
+
     @BeforeEach
     void reset() {
-        ConfigLocker.leaveServerLock();
+        clearLocks();
         config = new TestConfig();
         descriptor = ConfigDescriptor.of(
                 ConfigPath.of(MODULE, SEGMENT, ""),
                 () -> config,
                 new TestConfig());
+        MODULE_INSTANCE.setDescriptor(descriptor);
         assertFalse(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL), "静态锁定表未清理干净");
     }
 
     @AfterEach
     void cleanUp() {
-        ConfigLocker.leaveServerLock();
+        clearLocks();
+    }
+
+    // ==================== 构造辅助 ====================
+
+    /** 用纯字段路径构造完整路径的锁定映射。 */
+    private static Map<String, String> locksFull(String dotPath, String value) {
+        Map<String, String> m = new LinkedHashMap<>();
+        m.put(ConfigPath.of(MODULE, SEGMENT, dotPath).toString(), value);
+        return m;
+    }
+
+    /** 构造一个可变锁定映射（Map.of 不允许 null value）。 */
+    private static Map<String, String> locks(String key, String value) {
+        Map<String, String> m = new LinkedHashMap<>();
+        m.put(key, value);
+        return m;
+    }
+
+    /** 把「完整路径 → 强制值」映射转为 ConfigLockerPolicyConfig 并交给执行器物化。 */
+    private static void applyLocks(Map<String, String> fullPathLocks) {
+        ConfigLockerPolicyConfig.Builder b = ConfigLockerPolicyConfig.builder(ConfigLocker.EXECUTOR_ID);
+        for (Map.Entry<String, String> e : fullPathLocks.entrySet()) {
+            ConfigPath cp = ConfigPath.parse(e.getKey());
+            b.lock(cp.module(), cp.id(), cp.dotPath(), e.getValue());
+        }
+        ConfigLocker.getInstance().onPolicyChanged(b.build());
+    }
+
+    /** 模拟 setAuthorized：移除给定完整路径后重新物化（还原其余）。 */
+    private static void unlock(String... fullPaths) {
+        Map<String, String> current = new LinkedHashMap<>(ConfigLocker.getLockStatusSnapshot());
+        for (String p : fullPaths) {
+            current.remove(p);
+        }
+        applyLocks(current);
+    }
+
+    /** 清空全部约束（模拟 leaveServerLock）。 */
+    private static void clearLocks() {
+        ConfigLocker.getInstance().onPolicyChanged(ConfigLockerPolicyConfig.empty());
     }
 
     // ==================== isLocked / getValueLocked 语义 ====================
@@ -111,7 +158,7 @@ class ConfigLockerTest {
         @Test
         @DisplayName("key 存在 + 非 null value = 锁定且有强制值")
         void keyWithValue_shouldLockAndForce() {
-            ConfigLocker.setLocked(locksFull(QSHOP_HIGHLIGHT, "false"));
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
 
             assertTrue(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL));
             assertEquals("false", ConfigLocker.getValueLocked(QSHOP_HIGHLIGHT_FULL));
@@ -120,7 +167,7 @@ class ConfigLockerTest {
         @Test
         @DisplayName("key 存在 + null value = 仅锁定无强制值")
         void keyWithNullValue_shouldLockWithoutForcing() {
-            ConfigLocker.setLocked(locksFull(QSHOP_HIGHLIGHT, null));
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, null));
 
             assertTrue(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL),
                     "value 为 null 时仍应视为锁定，判定依据是 key 是否存在");
@@ -131,7 +178,7 @@ class ConfigLockerTest {
         @DisplayName("空串是合法强制值，不等同于 null")
         void emptyStringValue_shouldBeValidForcedValue() {
             String full = ConfigPath.of(MODULE, SEGMENT, "components.qshop.sellKeyword").toString();
-            ConfigLocker.setLocked(locks(full, ""));
+            applyLocks(locks(full, ""));
 
             assertTrue(ConfigLocker.isLocked(full));
             assertEquals("", ConfigLocker.getValueLocked(full),
@@ -142,56 +189,53 @@ class ConfigLockerTest {
         @DisplayName("未预定义的任意路径也可被锁定")
         void arbitraryPath_shouldBeLockable() {
             String full = ConfigPath.of(MODULE, SEGMENT, "some.future.path").toString();
-            ConfigLocker.setLocked(locks(full, "x"));
+            applyLocks(locks(full, "x"));
             assertTrue(ConfigLocker.isLocked(full));
         }
 
         @Test
-        @DisplayName("重复 setLocked 同一 key 覆盖强制值")
+        @DisplayName("重复锁定同一 key 覆盖强制值")
         void repeatedSetLocked_shouldOverrideValue() {
-            ConfigLocker.setLocked(locksFull(QSHOP_HIGHLIGHT, "false"));
-            ConfigLocker.setLocked(locksFull(QSHOP_HIGHLIGHT, "true"));
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "true"));
 
             assertEquals("true", ConfigLocker.getValueLocked(QSHOP_HIGHLIGHT_FULL));
         }
 
         @Test
-        @DisplayName("setLocked 多个路径同时生效")
+        @DisplayName("重新物化相同锁是幂等的")
+        void reapplySameLocks_shouldBeIdempotent() {
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
+
+            assertTrue(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL));
+            assertEquals("false", ConfigLocker.getValueLocked(QSHOP_HIGHLIGHT_FULL));
+        }
+
+        @Test
+        @DisplayName("锁定多个路径同时生效")
         void setLocked_multiplePaths_shouldAllApply() {
-            Map<String, String> m = new HashMap<>();
+            Map<String, String> m = new LinkedHashMap<>();
             m.put(QSHOP_HIGHLIGHT_FULL, "false");
             m.put(ConfigPath.of(MODULE, SEGMENT, "scanner.maxTasksPerTick").toString(), "8");
-            ConfigLocker.setLocked(m);
+            applyLocks(m);
 
             assertTrue(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL));
             assertTrue(ConfigLocker.isLocked(
                     ConfigPath.of(MODULE, SEGMENT, "scanner.maxTasksPerTick").toString()));
-        }
-
-        @Test
-        @DisplayName("setLocked 空 Map 不改变现有状态")
-        void setLocked_emptyMap_shouldBeNoOp() {
-            ConfigLocker.setLocked(locksFull(QSHOP_HIGHLIGHT, "false"));
-            ConfigLocker.setLocked(new HashMap<>());
-
-            assertTrue(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL));
-            assertEquals("false", ConfigLocker.getValueLocked(QSHOP_HIGHLIGHT_FULL));
         }
     }
 
     // ==================== 进入 / 退出服务器 ====================
 
     @Nested
-    @DisplayName("enterServerLock / leaveServerLock")
+    @DisplayName("enterServer / leaveServer（经物化）")
     class ServerLifecycle {
 
         @Test
-        @DisplayName("进入服务器锁定 QShop 高亮（已注册默认锁）")
+        @DisplayName("进入服务器锁定 QShop 高亮（已登记默认锁）")
         void enterServerLock_shouldApplyDefaultLocks() {
-            // 注册默认锁（模拟 chunkscanner 模块初始化时登记）
-            ConfigLocker.registerDefaultLocks(MODULE, SEGMENT,
-                    Map.of(QSHOP_HIGHLIGHT, "false"));
-            ConfigLocker.enterServerLock();
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
 
             assertTrue(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL),
                     "进入多人服务器必须默认锁定 QShop 高亮，等待服务端授权");
@@ -202,12 +246,10 @@ class ConfigLockerTest {
         @Test
         @DisplayName("退出服务器清空所有锁定")
         void leaveServerLock_shouldClearAll() {
-            ConfigLocker.registerDefaultLocks(MODULE, SEGMENT,
-                    Map.of(QSHOP_HIGHLIGHT, "false"));
-            ConfigLocker.enterServerLock();
-            ConfigLocker.setLocked(locksFull("scanner.maxTasksPerTick", "4"));
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
+            applyLocks(locksFull("scanner.maxTasksPerTick", "4"));
 
-            ConfigLocker.leaveServerLock();
+            clearLocks();
 
             assertFalse(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL));
             assertFalse(ConfigLocker.isLocked(
@@ -215,23 +257,19 @@ class ConfigLockerTest {
         }
 
         @Test
-        @DisplayName("重复 leaveServerLock 是幂等的")
+        @DisplayName("重复清空是幂等的")
         void leaveServerLock_shouldBeIdempotent() {
-            ConfigLocker.registerDefaultLocks(MODULE, SEGMENT,
-                    Map.of(QSHOP_HIGHLIGHT, "false"));
-            ConfigLocker.enterServerLock();
-            ConfigLocker.leaveServerLock();
-            assertDoesNotThrow(ConfigLocker::leaveServerLock);
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
+            clearLocks();
+            assertDoesNotThrow(ConfigLockerTest::clearLocks);
             assertFalse(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL));
         }
 
         @Test
-        @DisplayName("重复 enterServerLock 是幂等的")
+        @DisplayName("重复进入是幂等的")
         void enterServerLock_shouldBeIdempotent() {
-            ConfigLocker.registerDefaultLocks(MODULE, SEGMENT,
-                    Map.of(QSHOP_HIGHLIGHT, "false"));
-            ConfigLocker.enterServerLock();
-            ConfigLocker.enterServerLock();
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
 
             assertTrue(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL));
             assertEquals("false", ConfigLocker.getValueLocked(QSHOP_HIGHLIGHT_FULL));
@@ -241,32 +279,30 @@ class ConfigLockerTest {
     // ==================== 授权解锁 ====================
 
     @Nested
-    @DisplayName("setAuthorized")
+    @DisplayName("unlock（模拟 setAuthorized）")
     class Authorization {
 
         @Test
-        @DisplayName("授权后对应路径解锁")
+        @DisplayName("解锁后对应路径解锁")
         void setAuthorized_shouldUnlockPath() {
-            ConfigLocker.registerDefaultLocks(MODULE, SEGMENT,
-                    Map.of(QSHOP_HIGHLIGHT, "false"));
-            ConfigLocker.enterServerLock();
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
             assertTrue(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL));
 
-            ConfigLocker.setAuthorized(new String[]{QSHOP_HIGHLIGHT_FULL});
+            unlock(QSHOP_HIGHLIGHT_FULL);
 
             assertFalse(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL));
             assertNull(ConfigLocker.getValueLocked(QSHOP_HIGHLIGHT_FULL));
         }
 
         @Test
-        @DisplayName("授权只影响列出的路径")
+        @DisplayName("解锁只影响列出的路径")
         void setAuthorized_shouldOnlyAffectListedPaths() {
-            Map<String, String> m = new HashMap<>();
+            Map<String, String> m = new LinkedHashMap<>();
             m.put(QSHOP_HIGHLIGHT_FULL, "false");
             m.put(ConfigPath.of(MODULE, SEGMENT, "scanner.maxTasksPerTick").toString(), "8");
-            ConfigLocker.setLocked(m);
+            applyLocks(m);
 
-            ConfigLocker.setAuthorized(new String[]{QSHOP_HIGHLIGHT_FULL});
+            unlock(QSHOP_HIGHLIGHT_FULL);
 
             assertFalse(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL));
             assertTrue(ConfigLocker.isLocked(
@@ -275,50 +311,56 @@ class ConfigLockerTest {
         }
 
         @Test
-        @DisplayName("授权未锁定的路径不抛异常")
+        @DisplayName("解锁未锁定的路径不抛异常")
         void setAuthorized_unlockedPath_shouldNotThrow() {
             assertDoesNotThrow(() ->
-                    ConfigLocker.setAuthorized(new String[]{
-                            ConfigPath.of(MODULE, SEGMENT, "never.locked.path").toString()}));
+                    unlock(ConfigPath.of(MODULE, SEGMENT, "never.locked.path").toString()));
         }
 
         @Test
-        @DisplayName("授权空数组不改变状态")
+        @DisplayName("解锁空数组不改变状态")
         void setAuthorized_emptyArray_shouldBeNoOp() {
-            ConfigLocker.registerDefaultLocks(MODULE, SEGMENT,
-                    Map.of(QSHOP_HIGHLIGHT, "false"));
-            ConfigLocker.enterServerLock();
-            ConfigLocker.setAuthorized(new String[0]);
-
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
+            unlock();
             assertTrue(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL));
         }
 
         @Test
-        @DisplayName("可授权任意路径，包括未预定义在默认锁中的")
+        @DisplayName("可解锁任意路径，包括未预定义在默认锁中的")
         void setAuthorized_arbitraryPath_shouldWork() {
-            ConfigLocker.setLocked(locks(
+            applyLocks(locks(
                     ConfigPath.of(MODULE, SEGMENT, "custom.future.option").toString(), "v"));
-            ConfigLocker.setAuthorized(new String[]{
-                    ConfigPath.of(MODULE, SEGMENT, "custom.future.option").toString()});
-
+            unlock(ConfigPath.of(MODULE, SEGMENT, "custom.future.option").toString());
             assertFalse(ConfigLocker.isLocked(
                     ConfigPath.of(MODULE, SEGMENT, "custom.future.option").toString()));
         }
 
         @Test
-        @DisplayName("授权后再次进入服务器会重新锁定默认项")
+        @DisplayName("解锁后再次进入服务器会重新锁定默认项")
         void reenterAfterAuthorized_shouldRelock() {
-            ConfigLocker.registerDefaultLocks(MODULE, SEGMENT,
-                    Map.of(QSHOP_HIGHLIGHT, "false"));
-            ConfigLocker.enterServerLock();
-            ConfigLocker.setAuthorized(new String[]{QSHOP_HIGHLIGHT_FULL});
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
+            unlock(QSHOP_HIGHLIGHT_FULL);
             assertFalse(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL));
 
-            ConfigLocker.leaveServerLock();
-            ConfigLocker.enterServerLock();
+            clearLocks();
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
 
             assertTrue(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL),
                     "换服务器后授权必须失效，重新回到等待授权状态");
+        }
+
+        @Test
+        @DisplayName("重复加锁不刷新原值快照（解锁回到玩家真实设置）")
+        void repeatedLock_shouldNotRefreshOriginalSnapshot() {
+            config.components.qshop.highlightEnabled = true; // 玩家本地值
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false")); // 捕获原值快照 = true
+            config.components.qshop.highlightEnabled = true; // 玩家在锁定期间又改回 true
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false")); // 再次锁定：原值快照不得刷新
+
+            unlock(QSHOP_HIGHLIGHT_FULL); // 还原必须回到玩家原值 true，而非被强制值 false 覆盖
+
+            assertTrue(config.components.qshop.highlightEnabled,
+                    "解锁必须回到玩家原值 true，而非被强制值 false 覆盖");
         }
     }
 
@@ -333,7 +375,7 @@ class ConfigLockerTest {
         void applyAll_shouldOverwriteConfigValue() {
             config.components.qshop.highlightEnabled = true; // 模拟玩家手改配置文件
 
-            ConfigLocker.setLocked(locksFull(QSHOP_HIGHLIGHT, "false"));
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
             ConfigLocker.applyAll(List.of(descriptor));
 
             assertFalse(config.components.qshop.highlightEnabled,
@@ -345,11 +387,11 @@ class ConfigLockerTest {
         void applyAll_nullValue_shouldNotModifyConfig() {
             config.components.qshop.highlightEnabled = true;
 
-            ConfigLocker.setLocked(locksFull(QSHOP_HIGHLIGHT, null));
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, null));
             ConfigLocker.applyAll(List.of(descriptor));
 
             assertTrue(config.components.qshop.highlightEnabled,
-                    "value 为 null 表示仅禁止修改，不应强制覆盖当前值");
+                    "value 为 null 表示仅锁定无强制值，不应强制覆盖当前值");
         }
 
         @Test
@@ -367,10 +409,10 @@ class ConfigLockerTest {
         void applyAll_unknownPath_shouldNotBreakOthers() {
             config.components.qshop.highlightEnabled = true;
 
-            Map<String, String> m = new HashMap<>();
+            Map<String, String> m = new LinkedHashMap<>();
             m.put(ConfigPath.of(MODULE, SEGMENT, "totally.bogus.path").toString(), "1");
             m.put(QSHOP_HIGHLIGHT_FULL, "false");
-            ConfigLocker.setLocked(m);
+            applyLocks(m);
 
             assertDoesNotThrow(() -> ConfigLocker.applyAll(List.of(descriptor)));
             assertFalse(config.components.qshop.highlightEnabled,
@@ -380,20 +422,67 @@ class ConfigLockerTest {
         @Test
         @DisplayName("applyAll 空描述符列表不抛异常")
         void applyAll_emptyDescriptors_shouldNotThrow() {
-            ConfigLocker.setLocked(locksFull(QSHOP_HIGHLIGHT, "false"));
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
             assertDoesNotThrow(() -> ConfigLocker.applyAll(List.of()));
         }
 
         @Test
         @DisplayName("多次 applyAll 结果一致（幂等）")
         void applyAll_shouldBeIdempotent() {
-            ConfigLocker.setLocked(locksFull(QSHOP_HIGHLIGHT, "false"));
+            applyLocks(locksFull(QSHOP_HIGHLIGHT, "false"));
 
             ConfigLocker.applyAll(List.of(descriptor));
             config.components.qshop.highlightEnabled = true;
             ConfigLocker.applyAll(List.of(descriptor));
 
             assertFalse(config.components.qshop.highlightEnabled);
+        }
+    }
+
+    /** 持有当前描述符的测试模块，注册到 ModuleRegistry 以便路径解析与还原。 */
+    static final class TestModule implements IModule {
+        private volatile ConfigDescriptor descriptor;
+
+        void setDescriptor(ConfigDescriptor d) {
+            this.descriptor = d;
+        }
+
+        @Override
+        public String getId() {
+            return MODULE;
+        }
+
+        @Override
+        public String getVersion() {
+            return "test";
+        }
+
+        @Override
+        public Text getName() {
+            return Text.literal("test");
+        }
+
+        @Override
+        public Text getDescription() {
+            return Text.literal("test");
+        }
+
+        @Override
+        public void onInitializeModule() {}
+
+        @Override
+        public List<ConfigDescriptor> getConfigDescriptors() {
+            return descriptor == null ? List.of() : List.of(descriptor);
+        }
+
+        @Override
+        public List<String> getCommandLiterals() {
+            return List.of();
+        }
+
+        @Override
+        public LiteralArgumentBuilder<FabricClientCommandSource> buildCommands() {
+            return null;
         }
     }
 }

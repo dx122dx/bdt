@@ -1,6 +1,6 @@
 package com.billy65536.infrastructure.security.core.policy;
 
-import java.util.List;
+import java.util.Collection;
 
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
@@ -8,12 +8,13 @@ import net.minecraft.util.Identifier;
 /**
  * 安全策略扩展点：安全框架中的一等公民。
  *
- * <p>一个策略代表一组语义相关的安全约束，持有激活状态，并下辖若干
- * {@link ISecurityExecutor}。策略激活时其全部执行器随之启用，停用时随之禁用。</p>
+ * <p>一个策略代表一组语义相关的安全约束，持有激活状态，并产出若干
+ * {@link SecurityPolicyConfig}（不可变配置片段）。策略激活时其配置片段被
+ * {@link SecurityManager} 合并后全量推送给对应的 {@link ISecurityExecutor}。</p>
  *
  * <p>外部模组通过
  * {@link com.billy65536.infrastructure.security.api.SecurityPolicyProvider} 扩展点
- * 贡献自己的策略，经 {@link PolicyRegistry#register} 注册后即可由
+ * 贡献自己的策略，经 {@link SecurityManager#register(ISecurityPolicy)} 注册后即可由
  * {@code /inf security list|status|info|active|deactive} 查询与操控。</p>
  *
  * <h2>被动性</h2>
@@ -25,7 +26,7 @@ import net.minecraft.util.Identifier;
  *
  * <p>策略可以自行以 {@code public static final Event<XxxCallback>} 字段暴露专属子事件
  * （参见
- * {@link com.billy65536.infrastructure.security.policy.ServerOptinPolicy#LOCKS_APPLIED}）。
+ * {@link com.billy65536.infrastructure.security.builtin.ServerOptinPolicy#LOCKS_APPLIED}）。
  * 这类字段是静态的，任何能引用到该策略类的一方都可直接订阅，无需持有策略实例。</p>
  */
 public interface ISecurityPolicy {
@@ -60,28 +61,12 @@ public interface ISecurityPolicy {
     }
 
     /**
-     * 本策略下辖的全部执行器。
+     * 本策略产出的全部不可变配置片段。
      *
-     * <p>应返回稳定的集合（每次调用元素一致）：注册时框架据此建立执行器索引，
-     * 而启停时又会重新遍历本方法的返回值。若两次结果不一致，注册后新增的执行器
-     * 会收到启停回调却无法被命令查询到。允许返回 {@code null} 或空表（视为无执行器）。</p>
+     * <p>返回的片段应稳定（每次调用元素一致）。每个片段的 {@link SecurityPolicyConfig#getExecutorId()}
+     * 决定它被推送给哪个执行器。允许返回 {@code null} 或空集合（视为无配置）。</p>
      *
-     * @return 下辖执行器列表
+     * @return 配置片段集合
      */
-    List<ISecurityExecutor> getExecutors();
-
-    /**
-     * 策略被激活时的回调，在全部执行器 {@code onEnable} <b>之前</b>调用。
-     *
-     * <p>实现必须幂等。适合放置执行器之间共享的前置准备；实际的安全约束应交由
-     * 执行器施加。抛出的异常会被 {@link PolicyRegistry} 捕获记录，不会中断激活流程。</p>
-     */
-    default void onActivate() {}
-
-    /**
-     * 策略被停用时的回调，在全部执行器 {@code onDisable} <b>之后</b>调用。
-     *
-     * <p>幂等要求与异常处理同 {@link #onActivate()}。</p>
-     */
-    default void onDeactivate() {}
+    Collection<SecurityPolicyConfig> getConfigs();
 }

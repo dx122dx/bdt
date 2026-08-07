@@ -68,8 +68,8 @@ public record ConfigDescriptor(
      *
      * <p>约定：dangerous 配置对象中，凡是「默认值非该字段类型自然零值、且语义上为安全策略项」
      * 的字段，由模块在构造描述符时自行决定——本类不做字段级推断，dangerous 仅作整体开关，
- * 具体锁定项清单由模块在 {@code ConfigLocker} 注册时显式给出（见
- * {@code ConfigLocker#registerDefaultLocks(String, Map)}）。</p>
+     * 具体锁定项清单由模块在 {@code SecurityPortal} 注册时显式给出（见
+     * {@code SecurityPortal#injectConfig(Identifier, SecurityPolicyConfig)}）。</p>
      */
     public boolean isDangerous() {
         return dangerous;
