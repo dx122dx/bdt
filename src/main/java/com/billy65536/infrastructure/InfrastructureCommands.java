@@ -221,7 +221,10 @@ public final class InfrastructureCommands {
     private static int configGui(net.minecraft.client.MinecraftClient client, String target) {
         // 无参数：打开复合配置总览屏（统一入口，等同 ModMenu 的「设置」按钮）
         if (target == null || target.isEmpty()) {
-            client.execute(() -> client.setScreen(
+            // 必须用 send（延迟到下一帧）而非 execute：命令运行于客户端主线程，execute 会同步切屏，
+            // 随后聊天框关闭的 setScreen(null) 会将其覆盖，导致「有提示但屏幕不出现」。
+            // 延迟到聊天框关闭后再切屏，与 openGuiOnClient 的 client.send 行为一致。
+            client.send(() -> client.setScreen(
                     com.billy65536.infrastructure.core.gui.CompositeConfigScreen.create(
                             client.currentScreen)));
             send(client, Text.translatable("infrastructure.msg.config_composite_opened")
