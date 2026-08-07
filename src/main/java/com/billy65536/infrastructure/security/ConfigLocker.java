@@ -25,8 +25,14 @@ import com.billy65536.infrastructure.core.module.ModuleConfigReflectionAccessor;
  *
  * <p><b>多模块隔离</b>：锁定表 key 使用<b>完整配置路径</b>
  * （{@code <module>:<id>/<dot.path>}，见 {@link ConfigPath}），不同模块的锁定项互不干扰。
- * 模块在登记时通过 {@link #registerDefaultLocks(String, Map)} 注入其默认受保护项
- * （进入多人服务器时默认锁定的强制值），随后 {@link #enterServerLock()} 锁定全部已注册项。</p>
+ * 模块在登记时通过 {@link SecurityPolicies#contributeDefaultLocks(String, Map)} 注入其
+ * 默认受保护项（进入多人服务器时默认锁定的强制值），随后由
+ * {@code security:server-optin} 策略下辖的
+ * {@link com.billy65536.infrastructure.security.policy.ConfigLockerExecutor} 在激活时
+ * 调用 {@link #enterServerLock()} 锁定全部已注册项。</p>
+ *
+ * <p><b>生命周期归属</b>：{@link #enterServerLock()} / {@link #leaveServerLock()} 只应由
+ * 上述执行器调用，其他任何地方都不得直接触发，否则锁定状态会与策略激活态脱节。</p>
  *
  * <p>锁定状态统一存放在 {@link #lockStatus} Map 中，value 的语义为：</p>
  * <ul>
@@ -57,8 +63,13 @@ public final class ConfigLocker {
     /**
      * 各模块默认受保护配置项 → 强制值（进入服务器时默认锁定）。
      * key 为完整路径，与 {@link #lockStatus} 同构。由各模块登记时填充。
+     *
+     * <p>登记发生在模块发现 / 策略包注册线程，而读取发生在连接事件线程
+     * （{@link #enterServerLock}），故必须同步。与 {@link #lockStatus} 同理，
+     * value 允许为 {@code null}，不能用 {@code ConcurrentHashMap}。</p>
      */
-    private static final Map<String, String> defaultLocks = new HashMap<>();
+    private static final Map<String, String> defaultLocks =
+            Collections.synchronizedMap(new HashMap<>());
 
     private ConfigLocker() {}
 
@@ -79,26 +90,48 @@ public final class ConfigLocker {
      * {@code <moduleId>:config/<dot.path>}（段名默认 {@code config}）。
      * 模块若有自定义段名，应使用 {@link #registerDefaultLocks(String, String, Map)}。</p>
      *
+     * <p><b>包内可见</b>：外部模组不得直接调用，须经
+     * {@link SecurityPolicies#contributeDefaultLocks(String, Map)} 于安全策略框架内登记，
+     * 以保证默认锁的来源可被 {@code /inf security} 追溯。</p>
+     *
      * @param moduleId 模块 id（无命名空间纯名）
-     * @param locks    纯字段点分路径 → 强制值（空串 / null 表示仅锁定）
+     * @param locks    纯字段点分路径 → 强制值；{@code null} 表示仅锁定无强制值，
+     *                 空串 {@code ""} 是会被真正写入的合法强制值
      */
-    public static void registerDefaultLocks(String moduleId, Map<String, String> locks) {
+    static void registerDefaultLocks(String moduleId, Map<String, String> locks) {
         registerDefaultLocks(moduleId, "config", locks);
     }
 
     /**
      * 模块登记默认受保护配置项，显式指定段名（自定义段 id）。
      *
+     * <p><b>包内可见</b>，理由同 {@link #registerDefaultLocks(String, Map)}。</p>
+     *
      * @param moduleId 模块 id
      * @param segment  配置段名（如 {@code config}）
-     * @param locks    纯字段点分路径 → 强制值
+     * @param locks    纯字段点分路径 → 强制值，取值语义同
+     *                 {@link #registerDefaultLocks(String, Map)}
      */
-    public static void registerDefaultLocks(String moduleId, String segment, Map<String, String> locks) {
+    static void registerDefaultLocks(String moduleId, String segment, Map<String, String> locks) {
         for (Entry<String, String> e : locks.entrySet()) {
             String full = ConfigPath.of(moduleId, segment, e.getKey()).toString();
             defaultLocks.put(full, e.getValue());
         }
         LOGGER.info("Registered {} default server-locks for module '{}'.", locks.size(), moduleId);
+    }
+
+    /**
+     * 返回当前默认锁登记表的快照（完整路径 → 强制值）。
+     *
+     * <p>反映各模块<b>登记</b>的保护范围，与实际锁定态无关（未进服务器时锁定表为空，
+     * 本表依然非空）。供诊断命令与外部工具安全读取，避免持有内部 Map 引用。</p>
+     *
+     * @return 独立的副本，调用方可自由修改，不影响内部状态
+     */
+    public static Map<String, String> getDefaultLocksSnapshot() {
+        synchronized (defaultLocks) {
+            return new LinkedHashMap<>(defaultLocks);
+        }
     }
 
     /** 判断某完整配置路径是否属于配置锁定保护范围。 */
@@ -112,8 +145,10 @@ public final class ConfigLocker {
     }
 
     /**
-     * 返回当前锁定表的不可变快照（完整路径 → 强制值）。
+     * 返回当前锁定表的快照（完整路径 → 强制值）。
      * 供 {@code /inf security status} 等诊断命令安全读取，避免持有内部 Map 引用。
+     *
+     * @return 独立的副本，调用方可自由修改，不影响内部状态
      */
     public static Map<String, String> getLockStatusSnapshot() {
         synchronized (lockStatus) {
@@ -139,7 +174,10 @@ public final class ConfigLocker {
     /**
      * 进入多人服务器：仅锁定指定模块的默认受保护项。
      *
-     * @param moduleId 模块 id
+     * <p>细粒度变体，供需要按模块分批锁定的场景使用；内置的
+     * {@code security:server-optin} 策略走的是无参的 {@link #enterServerLock()}。</p>
+     *
+     * @param moduleId 模块 id（无命名空间纯名），不匹配任何登记项时为空操作
      */
     public static void enterServerLock(String moduleId) {
         int n = 0;

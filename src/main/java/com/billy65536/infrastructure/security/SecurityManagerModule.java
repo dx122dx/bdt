@@ -7,33 +7,49 @@ import com.billy65536.infrastructure.InfrastructureMod;
 import com.billy65536.infrastructure.core.config.ConfigDescriptor;
 import com.billy65536.infrastructure.core.config.ConfigPath;
 import com.billy65536.infrastructure.core.module.IModule;
-
+import com.billy65536.infrastructure.security.core.event.SecurityEvents;
+import com.billy65536.infrastructure.security.core.policy.ActivationTrigger;
+import com.billy65536.infrastructure.security.core.policy.ISecurityPolicy;
+import com.billy65536.infrastructure.security.core.policy.PolicyRegistry;
+import com.billy65536.infrastructure.security.pack.PolicyPackManager;
+import com.billy65536.infrastructure.security.policy.ServerOptinPolicy;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.text.Text;
 
 /**
- * 安全管理模块：作为 infrastructure 的一级「模块」接入（id={@code security}）。
+ * 安全模块：可拓展安全策略框架的宿主。
  *
- * <p>职责：</p>
- * <ul>
- *   <li>统一登记并初始化配置锁定层（{@link ConfigLocker}）；</li>
- *   <li>贡献通用安全默认锁定项（如「禁止客户端绕过调试锁」），经
- *       {@link ConfigLocker#registerDefaultLocks(String, Map)} 注册；</li>
- *   <li>提供 {@code /inf security status} 命令，展示当前服务器锁定的完整状态快照。</li>
- * </ul>
+ * <p>职责有四：</p>
+ * <ol>
+ *   <li>注册框架内置策略（{@link ServerOptinPolicy}），并经
+ *       {@link PolicyPackManager} 收集外部 mod 通过
+ *       {@code infrastructure:security} entrypoint 贡献的策略；</li>
+ *   <li>作为<b>唯一</b>的连接事件监听者，按各策略声明的
+ *       {@link ActivationTrigger} 集中判定并批量激活 / 停用——这样连接判定逻辑
+ *       全局只有一处，各策略保持被动；</li>
+ *   <li>在框架级 {@link SecurityEvents#ACTIVATE} 事件中为内置策略补发其子事件，
+ *       以保证子事件晚于执行器的实际动作；</li>
+ *   <li>挂载 {@code /inf security} 命令子树（见 {@link SecurityCommands}）。</li>
+ * </ol>
  *
- * <p>本模块本身是安全策略的「宿主」，而非被保护对象：默认锁是给<b>下游模组</b>的配置预留的
- * 通用样板（目前先登记基础设施自身的演示锁），真正的锁值仍由服务器连接期经
- * {@link ConfigLocker#enterServerLock(String)} 注入。</p>
+ * <p>本模块同时以普通模块身份贡献自己的配置段 {@code security:config} 与一组默认锁。</p>
  */
 public final class SecurityManagerModule implements IModule {
 
-    /** 通用安全默认锁：演示项，禁止客户端绕过调试锁。 */
+    /**
+     * 本模块自身的默认受保护配置项：进入多人服务器后禁止客户端绕过调试开关。
+     *
+     * <p>key 为<b>纯字段点分路径</b>，模块与段名前缀由
+     * {@link SecurityPolicies#contributeDefaultLocks(String, Map)} 自动补全，
+     * 展开后为 {@code security:config/allowDebugOverride}，与
+     * {@link #getConfigDescriptors()} 暴露的路径一致。</p>
+     */
     private static final Map<String, String> DEFAULT_LOCKS = Map.of(
-            "security:config/allowDebugOverride", "false"
+            "allowDebugOverride", "false"
     );
 
     private SecurityConfig config = new SecurityConfig();
@@ -60,32 +76,72 @@ public final class SecurityManagerModule implements IModule {
         return Text.translatable("infrastructure.module.security.description");
     }
 
+    /**
+     * 初始化安全策略框架。
+     *
+     * <p>由模块发现流程调用，而发现挂在 {@code CLIENT_STARTED} 上，此时所有模组的
+     * 客户端入口点均已执行完毕，故 entrypoint 收集与连接事件注册在此都是安全的
+     * （连接必然晚于启动）。</p>
+     */
     @Override
     public void onInitializeModule() {
-        // 注册基础设施自带的通用安全默认锁。下游模组亦可调用同一 API 追加各自默认锁。
-        ConfigLocker.registerDefaultLocks("security", DEFAULT_LOCKS);
-        // 集中接管「服务端 opt-in」配置锁定的进入/退出生命周期：各模块只需登记默认锁
-        // （registerDefaultLocks），无需各自监听连接事件。仅进入多人服务器（非单人/局域网）
-        // 时锁定全部受保护项，等待服务器授权信号；退出时统一释放锁定。
-        ClientPlayConnectionEvents.JOIN.register((connection, sender, client) -> {
-            if (client.getCurrentServerEntry() != null && !client.isIntegratedServerRunning()) {
-                ConfigLocker.enterServerLock();
+        SecurityPolicies.contributeDefaultLocks("security", DEFAULT_LOCKS);
+
+        // 1) 框架内置策略
+        PolicyRegistry.register(ServerOptinPolicy.INSTANCE);
+
+        // 2) 外部 mod 经 "infrastructure:security" entrypoint 贡献的策略
+        PolicyPackManager.registerAll();
+
+        // 3) 内置策略的子事件：锁定生效后补发，须晚于执行器的实际锁定动作，
+        //    故挂在框架级 ACTIVATE 事件上（注册表保证其在执行器 onEnable 之后触发）
+        SecurityEvents.ACTIVATE.register(policy -> {
+            if (ServerOptinPolicy.ID.equals(policy.getId())) {
+                ServerOptinPolicy.fireLocksApplied();
             }
         });
-        ClientPlayConnectionEvents.DISCONNECT.register((connection, client) -> {
-            ConfigLocker.leaveServerLock();
+
+        // 4) 唯一的连接事件监听：按 trigger 集中判定
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+            if (isRemoteServer(client)) {
+                applyTrigger(ActivationTrigger.MULTIPLAYER_JOIN, true);
+            }
         });
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
+                applyTrigger(ActivationTrigger.MULTIPLAYER_JOIN, false));
+    }
+
+    /**
+     * 判定当前是否连接到<b>远程</b>多人服务器。
+     *
+     * <p>排除单人存档与局域网自开的集成服务器：这两种场景下玩家即服务器管理者，
+     * 无需施加「服务端 opt-in」约束。</p>
+     */
+    private static boolean isRemoteServer(MinecraftClient client) {
+        return client != null
+                && client.getCurrentServerEntry() != null
+                && !client.isIntegratedServerRunning();
+    }
+
+    /**
+     * 按触发条件批量设置策略激活态。
+     *
+     * <p>{@link ActivationTrigger#ALWAYS} 的策略不随连接状态变化，
+     * {@link ActivationTrigger#MANUAL} 的策略只认手动开关，故都不在此处理。</p>
+     */
+    private static void applyTrigger(ActivationTrigger trigger, boolean value) {
+        for (ISecurityPolicy policy : PolicyRegistry.getAll()) {
+            if (policy.getTrigger() == trigger) {
+                PolicyRegistry.setActive(policy.getId(), value);
+            }
+        }
     }
 
     @Override
     public List<ConfigDescriptor> getConfigDescriptors() {
-        // 危险项：该段含服务器可锁定字段，标记为 dangerous。
         ConfigPath path = ConfigPath.of("security", "config", "");
         return List.of(ConfigDescriptor.dangerous(
-                path,
-                (java.util.function.Supplier<Object>) () -> config,
-                config,
-                null));
+                path, (java.util.function.Supplier<Object>) () -> config, config, null));
     }
 
     @Override
@@ -95,30 +151,12 @@ public final class SecurityManagerModule implements IModule {
 
     @Override
     public LiteralArgumentBuilder<FabricClientCommandSource> buildCommands() {
-        return ClientCommandManager.literal("security")
-                .then(ClientCommandManager.literal("status")
-                        .executes(ctx -> {
-                            FabricClientCommandSource src = ctx.getSource();
-                            Map<String, String> snapshot = ConfigLocker.getLockStatusSnapshot();
-                            if (snapshot.isEmpty()) {
-                                src.sendFeedback(Text.translatable(
-                                        "infrastructure.command.security.status.empty"));
-                            } else {
-                                src.sendFeedback(Text.translatable(
-                                        "infrastructure.command.security.status.header",
-                                        snapshot.size()));
-                                snapshot.forEach((k, v) -> src.sendFeedback(Text.literal("  ")
-                                        .append(Text.literal(k).styled(s -> s.withColor(0xAAAAAA)))
-                                        .append(Text.literal(" = "))
-                                        .append(Text.literal(v))));
-                            }
-                            return 1;
-                        }));
+        return SecurityCommands.buildSecurityCommands();
     }
 
-    /** 安全模块的轻量配置对象（目前仅含一个演示性锁定项）。 */
+    /** 安全模块的轻量配置对象，对应配置段 {@code security:config}。 */
     public static final class SecurityConfig {
-        /** 是否允许客户端绕过调试锁；默认 false（由默认锁强制）。 */
+        /** 是否允许客户端绕过安全约束进行调试；受默认锁保护，正常应保持 {@code false}。 */
         public boolean allowDebugOverride = false;
     }
 }
