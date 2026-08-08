@@ -116,5 +116,11 @@
     "text.autoconfig.infrastructure-debugger-config.option.verboseLogging": "详细日志",
     "text.autoconfig.infrastructure-debugger-config.option.verboseLogging.@Tooltip": "输出调试框架的详细日志，包括注册明细与动作执行轨迹。",
     "text.autoconfig.infrastructure-debugger-config.option.showActionStackTrace": "显示异常堆栈",
-    "text.autoconfig.infrastructure-debugger-config.option.showActionStackTrace.@Tooltip": "调试动作执行失败时，在聊天栏附加异常堆栈摘要（最多 5 帧）。"
+    "text.autoconfig.infrastructure-debugger-config.option.showActionStackTrace.@Tooltip": "调试动作执行失败时，在聊天栏附加异常堆栈摘要（最多 5 帧）。",
+
+    "text.autoconfig.infrastructure-security.title": "Billy's Mod infrastructure 安全设置",
+    "text.autoconfig.infrastructure-security.option.allowDebugOverride": "允许调试覆盖",
+    "text.autoconfig.infrastructure-security.option.allowDebugOverride.@Tooltip": "是否允许客户端绕过安全约束进行调试；受默认锁保护，正常应保持关闭。",
+    "text.autoconfig.infrastructure-security.option.allowPolicyOverride": "允许策略覆盖",
+    "text.autoconfig.infrastructure-security.option.allowPolicyOverride.@Tooltip": "是否允许外部来源（调试动作 / 服务端指令）经 Override 补丁覆盖安全配置；受默认锁保护，进入多人服务器后锁定为关闭。"
 }

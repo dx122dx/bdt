@@ -1,8 +1,11 @@
 package com.billy65536.infrastructure.security.core.policy;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 
 /**
@@ -86,5 +89,32 @@ public interface ISecurityPolicy {
      */
     default boolean injectStaticConfig(SecurityPolicyConfig config) {
         return false;
+    }
+
+    /**
+     * 返回本策略在 {@code /inf security status <policy>} 详情中展示的内容行。
+     *
+     * <p>命令层只负责通用外壳（id、激活状态与缩进），具体字段一律由本方法给出，
+     * 使命令层无需感知任何具体策略类型，也不与具体组件耦合。</p>
+     *
+     * <p>默认实现基于本接口通用属性给出「触发条件」与「可手动开关」两行；
+     * 实现方可通过覆写追加自身专属信息。</p>
+     *
+     * @return 状态行集合（每行一个 {@link Text}，内部可自带颜色）
+     */
+    default List<Text> getStatusLines() {
+        List<Text> lines = new ArrayList<>();
+        lines.add(Text.translatable("infrastructure.msg.security.field_trigger")
+                .append(Text.literal(getTrigger().name()).formatted(Formatting.AQUA)));
+        lines.add(Text.translatable("infrastructure.msg.security.field_toggleable")
+                .append(boolText(isManuallyToggleable())));
+        return lines;
+    }
+
+    /** 是 / 否的彩色文本表示（默认状态行共用）。 */
+    private static Text boolText(boolean value) {
+        return value
+                ? Text.translatable("infrastructure.msg.security.yes").formatted(Formatting.GREEN)
+                : Text.translatable("infrastructure.msg.security.no").formatted(Formatting.GRAY);
     }
 }

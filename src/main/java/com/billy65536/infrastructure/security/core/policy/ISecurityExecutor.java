@@ -1,5 +1,7 @@
 package com.billy65536.infrastructure.security.core.policy;
 
+import java.util.List;
+
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
@@ -47,4 +49,19 @@ public interface ISecurityExecutor {
      * @param config 合并后的全量配置；{@code null} 表示释放全部约束
      */
     void onPolicyChanged(SecurityPolicyConfig config);
+
+    /**
+     * 返回本执行器在 {@code /inf security status <executor>} 详情中展示的内容行。
+     *
+     * <p>命令层只负责通用外壳（id、启用状态与缩进），具体字段一律由本方法给出，
+     * 使命令层无需感知任何具体执行器类型，也不与具体组件耦合。</p>
+     *
+     * <p>默认实现给出描述行；实现方（如内置 {@code ConfigLocker}）可通过覆写
+     * 追加自身运行状态（如当前锁定表）。</p>
+     *
+     * @return 状态行集合（每行一个 {@link Text}，内部可自带颜色）
+     */
+    default List<Text> getStatusLines() {
+        return List.of(Text.translatable("infrastructure.msg.security.field_desc").append(getDescription()));
+    }
 }

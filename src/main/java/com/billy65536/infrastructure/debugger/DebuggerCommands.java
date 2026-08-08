@@ -232,11 +232,11 @@ public final class DebuggerCommands {
                 .formatted(Formatting.GRAY));
         sendMsg(client, Text.literal("  ")
                 .append(Text.translatable("infrastructure.msg.action_info_name")
-                        .formatted(Formatting.DARK_GRAY))
+                        .formatted(Formatting.GRAY))
                 .append(action.getName().copy().formatted(Formatting.AQUA)));
         sendMsg(client, Text.literal("  ")
                 .append(Text.translatable("infrastructure.msg.action_info_desc")
-                        .formatted(Formatting.DARK_GRAY))
+                        .formatted(Formatting.GRAY))
                 .append(action.getDescription().copy().formatted(Formatting.GRAY)));
         return 1;
     }
@@ -257,7 +257,7 @@ public final class DebuggerCommands {
                 .formatted(Formatting.GRAY));
         sendMsg(client, Text.literal("  ")
                 .append(feature.getName().copy().formatted(Formatting.AQUA))
-                .append(Text.literal(" - ").formatted(Formatting.DARK_GRAY))
+                .append(Text.literal(" - ").formatted(Formatting.GRAY))
                 .append(feature.getDescription().copy().formatted(Formatting.GRAY)));
         return 1;
     }
@@ -294,12 +294,12 @@ public final class DebuggerCommands {
         if (ActionRegistry.size() == 0) {
             sendMsg(client, Text.literal("  ")
                     .append(Text.translatable("infrastructure.msg.list_empty")
-                            .formatted(Formatting.DARK_GRAY)));
+                            .formatted(Formatting.GRAY)));
         } else {
             for (IDebugAction a : ActionRegistry.getAll()) {
                 sendMsg(client, Text.literal("  ")
                         .append(Text.literal(a.getId().toString()).formatted(Formatting.AQUA))
-                        .append(Text.literal(" - ").formatted(Formatting.DARK_GRAY))
+                        .append(Text.literal(" - ").formatted(Formatting.GRAY))
                         .append(a.getName().copy().formatted(Formatting.GRAY)));
             }
         }
@@ -310,14 +310,14 @@ public final class DebuggerCommands {
         if (FeatureRegistry.size() == 0) {
             sendMsg(client, Text.literal("  ")
                     .append(Text.translatable("infrastructure.msg.list_empty")
-                            .formatted(Formatting.DARK_GRAY)));
+                            .formatted(Formatting.GRAY)));
         } else {
             for (IDebugFeature f : FeatureRegistry.getAll()) {
                 sendMsg(client, Text.literal("  ")
                         .append(statusText(FeatureRegistry.isEnabled(f.getId())))
                         .append(Text.literal(" "))
                         .append(Text.literal(f.getId().toString()).formatted(Formatting.AQUA))
-                        .append(Text.literal(" - ").formatted(Formatting.DARK_GRAY))
+                        .append(Text.literal(" - ").formatted(Formatting.GRAY))
                         .append(f.getName().copy().formatted(Formatting.GRAY)));
             }
         }
@@ -350,7 +350,7 @@ public final class DebuggerCommands {
         StackTraceElement[] trace = e.getStackTrace();
         int limit = Math.min(trace.length, 5);
         for (int i = 0; i < limit; i++) {
-            sendMsg(client, Text.literal("  at " + trace[i].toString()).formatted(Formatting.DARK_GRAY));
+            sendMsg(client, Text.literal("  at " + trace[i].toString()).formatted(Formatting.GRAY));
         }
     }
 

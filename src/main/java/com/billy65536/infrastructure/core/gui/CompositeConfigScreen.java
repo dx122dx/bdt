@@ -1,5 +1,6 @@
 package com.billy65536.infrastructure.core.gui;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
@@ -75,25 +76,29 @@ public final class CompositeConfigScreen {
                         "infrastructure.gui.composite.module_sub",
                         Text.literal(module.getId()),
                         Text.literal(module.getVersion()));
-                root.addEntry(entryBuilder
-                        .startSubCategory(Text.empty()
-                                .append(module.getName().copy().styled(s -> s.withBold(true)))
-                                .append(Text.literal("  "))
-                                .append(sub.copy().styled(s -> s.withColor(0x888888))))
-                        .build());
+                Text subTitle = Text.empty()
+                        .append(module.getName().copy().styled(s -> s.withBold(true)))
+                        .append(Text.literal("  "))
+                        .append(sub.copy().styled(s -> s.withColor(0xAAAAAA)));
 
+                // 模块条目必须包含在可展开的 SubCategory 块内，而非与展开块并列，
+                // 否则折叠子分组时条目仍散落在根层级。
+                // （startSubCategory 的列表参数为 raw 类型，为 cloth-config API 固有签名）
+                @SuppressWarnings("rawtypes")
+                List<AbstractConfigListEntry> subEntries = new ArrayList<>();
                 List<ConfigDescriptor> descriptors = module.getConfigDescriptors();
                 if (descriptors == null || descriptors.isEmpty()) {
-                    root.addEntry(entryBuilder
+                    subEntries.add(entryBuilder
                             .startTextDescription(Text.translatable("infrastructure.gui.composite.no_config"))
                             .build());
                 } else {
                     for (ConfigDescriptor descriptor : descriptors) {
-                        root.addEntry(new ConfigEntryRow(
+                        subEntries.add(new ConfigEntryRow(
                                 Text.literal(descriptor.path().targetString()),
                                 descriptor));
                     }
                 }
+                root.addEntry(entryBuilder.startSubCategory(subTitle, subEntries).build());
             }
         }
 

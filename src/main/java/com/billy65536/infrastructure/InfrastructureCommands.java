@@ -121,14 +121,14 @@ public final class InfrastructureCommands {
                     .append(Text.literal(fullPath).formatted(Formatting.GOLD))
                     .append(Text.literal(" = ").formatted(Formatting.GRAY))
                     .append(Text.literal(String.valueOf(value)).formatted(Formatting.AQUA))
-                    .append(Text.literal("  (type: ").formatted(Formatting.DARK_GRAY))
+                    .append(Text.literal("  (type: ").formatted(Formatting.GRAY))
                     .append(Text.literal(ConfigAccessor.getTypeName(
                                     ConfigManager.findDescriptorByPath(fullPath),
                                     ConfigManager.dotPathOf(fullPath)))
-                            .formatted(Formatting.DARK_GRAY))
-                    .append(Text.literal(", default: ").formatted(Formatting.DARK_GRAY))
-                    .append(Text.literal(String.valueOf(def)).formatted(Formatting.DARK_GRAY))
-                    .append(Text.literal(")").formatted(Formatting.DARK_GRAY));
+                            .formatted(Formatting.GRAY))
+                    .append(Text.literal(", default: ").formatted(Formatting.GRAY))
+                    .append(Text.literal(String.valueOf(def)).formatted(Formatting.GRAY))
+                    .append(Text.literal(")").formatted(Formatting.GRAY));
             send(client, out);
             return 1;
         } catch (ConfigAccessException e) {
@@ -384,13 +384,13 @@ public final class InfrastructureCommands {
         if (ModuleRegistry.size() == 0) {
             out = out.append(Text.literal("  ")
                     .append(Text.translatable("infrastructure.msg.list_empty")
-                            .formatted(Formatting.DARK_GRAY))).append("\n");
+                            .formatted(Formatting.GRAY))).append("\n");
         } else {
             for (IModule m : ModuleRegistry.getAll()) {
                 out = out.append(Text.literal("  - ")
                                 .append(Text.literal(m.getId()).formatted(Formatting.AQUA))
                                 .append(Text.literal(" (v" + m.getVersion() + ")").formatted(Formatting.GRAY))
-                                .append(Text.literal(": ").formatted(Formatting.DARK_GRAY))
+                                .append(Text.literal(": ").formatted(Formatting.GRAY))
                                 .append(m.getName().copy().formatted(Formatting.GRAY)))
                         .append("\n");
             }
@@ -414,13 +414,13 @@ public final class InfrastructureCommands {
         // 标签键必须与「整句」键区分：info_version 带 %s 占位符、info_desc 是完整句子，
         // 直接当标签用会渲染出 "版本：%s1.0.0" 与整句拼接的错乱文本
         out = out.append(Text.literal("  ")
-                .append(Text.translatable("infrastructure.msg.info_version_label").formatted(Formatting.DARK_GRAY))
+                .append(Text.translatable("infrastructure.msg.info_version_label").formatted(Formatting.GRAY))
                 .append(Text.literal(module.getVersion()).formatted(Formatting.GRAY))).append("\n");
         out = out.append(Text.literal("  ")
-                .append(Text.translatable("infrastructure.msg.info_name").formatted(Formatting.DARK_GRAY))
+                .append(Text.translatable("infrastructure.msg.info_name").formatted(Formatting.GRAY))
                 .append(module.getName().copy().formatted(Formatting.AQUA))).append("\n");
         out = out.append(Text.literal("  ")
-                .append(Text.translatable("infrastructure.msg.info_desc_label").formatted(Formatting.DARK_GRAY))
+                .append(Text.translatable("infrastructure.msg.info_desc_label").formatted(Formatting.GRAY))
                 .append(module.getDescription().copy().formatted(Formatting.GRAY))).append("\n");
 
         // 贡献：命令
@@ -430,7 +430,7 @@ public final class InfrastructureCommands {
         var literals = module.getCommandLiterals();
         if (literals == null || literals.isEmpty()) {
             out = out.append(Text.literal("    ")
-                    .append(Text.translatable("infrastructure.msg.list_empty").formatted(Formatting.DARK_GRAY)))
+                    .append(Text.translatable("infrastructure.msg.list_empty").formatted(Formatting.GRAY)))
                     .append("\n");
         } else {
             for (String lit : literals) {
@@ -448,7 +448,7 @@ public final class InfrastructureCommands {
         List<ConfigDescriptor> descriptors = module.getConfigDescriptors();
         if (descriptors.isEmpty()) {
             out = out.append(Text.literal("    ")
-                    .append(Text.translatable("infrastructure.msg.list_empty").formatted(Formatting.DARK_GRAY)))
+                    .append(Text.translatable("infrastructure.msg.list_empty").formatted(Formatting.GRAY)))
                     .append("\n");
         } else {
             for (ConfigDescriptor d : descriptors) {
@@ -457,7 +457,7 @@ public final class InfrastructureCommands {
                                 .append(Text.literal(d.path().targetString()).formatted(Formatting.AQUA))
                                 .append(Text.literal(" "))
                                 .append(Text.translatable("infrastructure.msg.info_config_count", count)
-                                        .formatted(Formatting.DARK_GRAY)))
+                                        .formatted(Formatting.GRAY)))
                         .append("\n");
             }
         }

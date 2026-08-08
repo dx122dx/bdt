@@ -25,7 +25,9 @@ import com.billy65536.infrastructure.security.core.policy.ISecurityExecutor;
 import com.billy65536.infrastructure.security.core.policy.SecurityManager;
 import com.billy65536.infrastructure.security.core.policy.SecurityPolicyConfig;
 
+import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 
 /**
@@ -121,6 +123,40 @@ public final class ConfigLocker implements ISecurityExecutor {
     @Override
     public Text getDescription() {
         return Text.translatable("infrastructure.security.executor.config_locker.description");
+    }
+
+    /**
+     * 执行器状态行：描述 + 当前锁定表快照。
+     *
+     * <p>锁定明细属于本执行器自身运行状态，故由本方法自行定义并输出，
+     * 命令层不再直接感知 {@link ConfigLocker} 的任何内部细节。</p>
+     */
+    @Override
+    public List<Text> getStatusLines() {
+        List<Text> lines = new ArrayList<>();
+        lines.add(Text.translatable("infrastructure.msg.security.field_desc").append(getDescription()));
+        Map<String, String> snapshot = getLockStatusSnapshot();
+        if (snapshot.isEmpty()) {
+            lines.add(Text.translatable("infrastructure.msg.security.locks_empty"));
+            return lines;
+        }
+        lines.add(Text.translatable("infrastructure.msg.security.locks_header", snapshot.size()));
+        Map<String, Origin> sources = getLockSourceSnapshot();
+        snapshot.forEach((k, v) -> {
+            MutableText line = Text.literal("    ")
+                    .append(Text.literal(k).formatted(Formatting.GRAY))
+                    .append(Text.literal(" = ").formatted(Formatting.GRAY))
+                    .append(Text.literal(String.valueOf(v)).formatted(Formatting.GRAY));
+            Origin origin = sources.get(k);
+            if (origin != null && !origin.isUnknown()) {
+                line.append(Text.literal(" "))
+                        .append(Text.translatable("infrastructure.msg.security.audit_locked_by",
+                                Text.literal(origin.getPrimary().toString()).formatted(Formatting.AQUA))
+                                .formatted(Formatting.GRAY));
+            }
+            lines.add(line);
+        });
+        return lines;
     }
 
     /**

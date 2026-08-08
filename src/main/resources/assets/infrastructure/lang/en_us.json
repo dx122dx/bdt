@@ -116,5 +116,11 @@
     "text.autoconfig.infrastructure-debugger-config.option.verboseLogging": "Verbose Logging",
     "text.autoconfig.infrastructure-debugger-config.option.verboseLogging.@Tooltip": "Log detailed framework information, including registration details and action execution traces.",
     "text.autoconfig.infrastructure-debugger-config.option.showActionStackTrace": "Show Stack Trace",
-    "text.autoconfig.infrastructure-debugger-config.option.showActionStackTrace.@Tooltip": "Append an exception stack trace summary (up to 5 frames) to chat when a debug action fails."
+    "text.autoconfig.infrastructure-debugger-config.option.showActionStackTrace.@Tooltip": "Append an exception stack trace summary (up to 5 frames) to chat when a debug action fails.",
+
+    "text.autoconfig.infrastructure-security.title": "Billy's Mod infrastructure Security Settings",
+    "text.autoconfig.infrastructure-security.option.allowDebugOverride": "Allow Debug Override",
+    "text.autoconfig.infrastructure-security.option.allowDebugOverride.@Tooltip": "Whether to allow the client to bypass security constraints for debugging; protected by the default lock, keep it off normally.",
+    "text.autoconfig.infrastructure-security.option.allowPolicyOverride": "Allow Policy Override",
+    "text.autoconfig.infrastructure-security.option.allowPolicyOverride.@Tooltip": "Whether to allow external sources (debug actions / server commands) to override security config via override patches; protected by the default lock and locked to off after joining a multiplayer server."
 }

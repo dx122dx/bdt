@@ -10,10 +10,8 @@ import java.util.Locale;
 import java.util.function.Supplier;
 
 import com.billy65536.infrastructure.InfrastructureMod;
-import com.billy65536.infrastructure.security.builtin.ConfigLocker;
 import com.billy65536.infrastructure.security.core.audit.AuditEntry;
 import com.billy65536.infrastructure.security.core.audit.SecurityAuditLog;
-import com.billy65536.infrastructure.security.core.internal.Origin;
 import com.billy65536.infrastructure.security.core.policy.ISecurityExecutor;
 import com.billy65536.infrastructure.security.core.policy.ISecurityPolicy;
 import com.billy65536.infrastructure.security.core.policy.SecurityManager;
@@ -154,7 +152,7 @@ public final class SecurityCommands {
         if (SecurityManager.size() == 0) {
             sendMsg(client, Text.literal("  ")
                     .append(Text.translatable("infrastructure.msg.security.list_empty")
-                            .formatted(Formatting.DARK_GRAY)));
+                            .formatted(Formatting.GRAY)));
             return 1;
         }
         for (ISecurityPolicy policy : SecurityManager.getAll()) {
@@ -162,14 +160,14 @@ public final class SecurityCommands {
                     .append(statusText(SecurityManager.isActive(policy.getId())))
                     .append(Text.literal(" "))
                     .append(Text.literal(policy.getId().toString()).formatted(Formatting.AQUA))
-                    .append(Text.literal(" - ").formatted(Formatting.DARK_GRAY))
+                    .append(Text.literal(" - ").formatted(Formatting.GRAY))
                     .append(policy.getName().copy().formatted(Formatting.GRAY)));
             for (ISecurityExecutor exec : executorsOf(policy)) {
-                sendMsg(client, Text.literal("    - ").formatted(Formatting.DARK_GRAY)
+                sendMsg(client, Text.literal("    - ").formatted(Formatting.GRAY)
                         .append(statusText(SecurityManager.isExecutorEnabled(exec.getId())))
                         .append(Text.literal(" "))
                         .append(Text.literal(exec.getId().toString()).formatted(Formatting.AQUA))
-                        .append(Text.literal(" - ").formatted(Formatting.DARK_GRAY))
+                        .append(Text.literal(" - ").formatted(Formatting.GRAY))
                         .append(exec.getName().copy().formatted(Formatting.GRAY)));
             }
         }
@@ -183,7 +181,7 @@ public final class SecurityCommands {
         if (SecurityManager.size() == 0) {
             sendMsg(client, Text.literal("  ")
                     .append(Text.translatable("infrastructure.msg.security.list_empty")
-                            .formatted(Formatting.DARK_GRAY)));
+                            .formatted(Formatting.GRAY)));
             return 1;
         }
         for (ISecurityPolicy policy : SecurityManager.getAll()) {
@@ -206,22 +204,23 @@ public final class SecurityCommands {
                             Text.literal(id.toString()).formatted(Formatting.GOLD),
                             statusText(active))
                     .formatted(Formatting.GRAY));
-            sendMsg(client, indent(Text.translatable("infrastructure.msg.security.field_trigger")
-                    .append(Text.literal(policy.getTrigger().name()).formatted(Formatting.AQUA))));
-            sendMsg(client, indent(Text.translatable("infrastructure.msg.security.field_toggleable")
-                    .append(boolText(policy.isManuallyToggleable()))));
+            for (Text line : policy.getStatusLines()) {
+                sendMsg(client, indent(line));
+            }
 
             List<ISecurityExecutor> execs = executorsOf(policy);
             sendMsg(client, indent(Text.translatable("infrastructure.msg.security.field_executors",
-                    execs.size())));
+                    execs.size()).formatted(Formatting.GRAY)));
             for (ISecurityExecutor exec : execs) {
-                sendMsg(client, Text.literal("    - ").formatted(Formatting.DARK_GRAY)
+                sendMsg(client, Text.literal("    - ").formatted(Formatting.GRAY)
                         .append(statusText(SecurityManager.isExecutorEnabled(exec.getId())))
                         .append(Text.literal(" "))
                         .append(Text.literal(exec.getId().toString()).formatted(Formatting.AQUA)));
+                for (Text line : exec.getStatusLines()) {
+                    sendMsg(client, Text.literal("      ").append(line));
+                }
             }
             sendOverrideDiagnostics(client);
-            sendLockSnapshot(client);
             return 1;
         }
 
@@ -231,8 +230,9 @@ public final class SecurityCommands {
                             Text.literal(id.toString()).formatted(Formatting.GOLD),
                             statusText(SecurityManager.isExecutorEnabled(id)))
                     .formatted(Formatting.GRAY));
-            sendMsg(client, indent(Text.translatable("infrastructure.msg.security.field_desc")
-                    .append(executor.getDescription().copy().formatted(Formatting.GRAY))));
+            for (Text line : executor.getStatusLines()) {
+                sendMsg(client, indent(line));
+            }
             sendOverrideDiagnostics(client);
             return 1;
         }
@@ -244,9 +244,11 @@ public final class SecurityCommands {
     /** 展示 Override 补丁数量与门控状态（熔断诊断）。 */
     private static void sendOverrideDiagnostics(MinecraftClient client) {
         sendMsg(client, indent(Text.translatable("infrastructure.msg.security.field_override_patches")
+                .formatted(Formatting.GRAY)
                 .append(Text.literal(String.valueOf(SecurityPortal.getContext().patchCount()))
                         .formatted(Formatting.AQUA))));
         sendMsg(client, indent(Text.translatable("infrastructure.msg.security.field_override_allowed")
+                .formatted(Formatting.GRAY)
                 .append(boolText(SecurityManager.isOverrideAllowed()))));
     }
 
@@ -296,14 +298,15 @@ public final class SecurityCommands {
         sendMsg(client, Text.translatable("infrastructure.msg.security.audit_title",
                 entries.size(), SecurityAuditLog.size()).formatted(Formatting.GOLD, Formatting.BOLD));
         if (entries.isEmpty()) {
-            sendMsg(client, indent(Text.translatable("infrastructure.msg.security.audit_empty")));
+            sendMsg(client, indent(Text.translatable("infrastructure.msg.security.audit_empty")
+                    .formatted(Formatting.GRAY)));
             return 1;
         }
         for (AuditEntry e : entries) {
             sendMsg(client, Text.literal("  ")
                     .append(Text.translatable(channelKey(e.channel())).formatted(Formatting.RED))
                     .append(Text.literal(" "))
-                    .append(Text.literal(e.fullPath()).formatted(Formatting.DARK_GRAY))
+                    .append(Text.literal(e.fullPath()).formatted(Formatting.GRAY))
                     .append(Text.literal(" "))
                     .append(Text.translatable("infrastructure.msg.security.audit_locked_by",
                             Text.literal(policyLabel(e)).formatted(Formatting.AQUA))
@@ -355,9 +358,9 @@ public final class SecurityCommands {
         }
     }
 
-    /** 统一的二级缩进 + 暗灰标签样式。 */
+    /** 统一的二级缩进样式（不覆盖内容内部颜色）。 */
     private static Text indent(Text body) {
-        return Text.literal("  ").append(body.copy().formatted(Formatting.DARK_GRAY));
+        return Text.literal("  ").append(body);
     }
 
     /** 激活状态的彩色文本表示。 */
@@ -372,32 +375,6 @@ public final class SecurityCommands {
         return value
                 ? Text.translatable("infrastructure.msg.security.yes").formatted(Formatting.GREEN)
                 : Text.translatable("infrastructure.msg.security.no").formatted(Formatting.GRAY);
-    }
-
-    /** 输出当前锁定表快照，用于策略详情。 */
-    private static void sendLockSnapshot(MinecraftClient client) {
-        var snapshot = ConfigLocker.getLockStatusSnapshot();
-        if (snapshot.isEmpty()) {
-            sendMsg(client, indent(Text.translatable("infrastructure.msg.security.locks_empty")));
-            return;
-        }
-        var sources = ConfigLocker.getLockSourceSnapshot();
-        sendMsg(client, indent(Text.translatable("infrastructure.msg.security.locks_header",
-                snapshot.size())));
-        snapshot.forEach((k, v) -> {
-            MutableText line = Text.literal("    ")
-                    .append(Text.literal(k).formatted(Formatting.DARK_GRAY))
-                    .append(Text.literal(" = ").formatted(Formatting.DARK_GRAY))
-                    .append(Text.literal(String.valueOf(v)).formatted(Formatting.GRAY));
-            Origin origin = sources.get(k);
-            if (origin != null && !origin.isUnknown()) {
-                line.append(Text.literal(" "))
-                        .append(Text.translatable("infrastructure.msg.security.audit_locked_by",
-                                Text.literal(origin.getPrimary().toString()).formatted(Formatting.AQUA))
-                                .formatted(Formatting.DARK_GRAY));
-            }
-            sendMsg(client, line);
-        });
     }
 
     /** 统一的「未找到」提示。 */

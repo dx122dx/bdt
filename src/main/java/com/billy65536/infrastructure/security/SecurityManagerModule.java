@@ -8,15 +8,20 @@ import com.billy65536.infrastructure.core.module.IModule;
 import com.billy65536.infrastructure.security.builtin.ConfigLocker;
 import com.billy65536.infrastructure.security.builtin.ConfigLockerPolicyConfig;
 import com.billy65536.infrastructure.security.builtin.ServerOptinPolicy;
+import com.billy65536.infrastructure.security.config.SecurityConfig;
+import com.billy65536.infrastructure.security.config.SecurityConfigLoader;
 import com.billy65536.infrastructure.security.core.policy.ActivationTrigger;
 import com.billy65536.infrastructure.security.core.policy.ISecurityPolicy;
 import com.billy65536.infrastructure.security.core.policy.SecurityManager;
 import com.billy65536.infrastructure.security.pack.PolicyPackManager;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 
+import me.shedaniel.autoconfig.AutoConfig;
+
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
 
 /**
@@ -44,9 +49,7 @@ public final class SecurityManagerModule implements IModule {
      * <p>与宿主模组的 {@code mod_version} 解耦：模块的演进节奏与 infrastructure 整体发版
      * 无关，改动本模块时手工递增本常量即可，不再随模组元数据漂移。</p>
      */
-    private static final String VERSION = "20260809.1";
-
-    private SecurityConfig config = new SecurityConfig();
+    private static final String VERSION = "20260809.2";
 
     @Override
     public String getId() {
@@ -76,12 +79,15 @@ public final class SecurityManagerModule implements IModule {
      */
     @Override
     public void onInitializeModule() {
+        // 0) 注册 AutoConfig（必须在任何 get() 之前，亦在门控读取配置之前）
+        SecurityConfigLoader.register();
+
         // 1) 登记内置执行器（即时生效，作为重算推送的目标）
         SecurityPortal.registerExecutor(reg -> reg.register(ConfigLocker.getInstance()));
 
         // 2) 覆盖门控读取本模块配置开关的活引用（锁定时字段被强制为 false）；
         //    必须早于 apply()，否则物化重算时门控尚未生效
-        SecurityPortal.setGate(() -> config.allowPolicyOverride);
+        SecurityPortal.setGate(() -> SecurityConfigLoader.get().allowPolicyOverride);
 
         // 3) 登记框架内置策略（即时生效）
         SecurityPortal.registerPolicy(reg -> reg.register(ServerOptinPolicy.INSTANCE));
@@ -142,7 +148,8 @@ public final class SecurityManagerModule implements IModule {
     public List<ConfigDescriptor> getConfigDescriptors() {
         ConfigPath path = ConfigPath.of("security", "config", "");
         return List.of(ConfigDescriptor.dangerous(
-                path, (java.util.function.Supplier<Object>) () -> config, config, null));
+                path, SecurityConfigLoader::get, new SecurityConfig(),
+                SecurityManagerModule::openSecurityConfigGui));
     }
 
     @Override
@@ -155,13 +162,17 @@ public final class SecurityManagerModule implements IModule {
         return SecurityCommands.buildSecurityCommands();
     }
 
-    /** 安全模块的轻量配置对象，对应配置段 {@code security:config}。 */
-    public static final class SecurityConfig {
-        /** 是否允许客户端绕过安全约束进行调试；受默认锁保护，正常应保持 {@code false}。 */
-        public boolean allowDebugOverride = false;
+    /** set/reset 后持久化：落盘 AutoConfig 配置文件。 */
+    @Override
+    public void saveConfig() {
+        SecurityConfigLoader.save();
+    }
 
-        /** 是否允许外部来源（调试动作 / 服务端指令）经 Override 补丁覆盖安全配置；
-         *  受默认锁保护，进入多人服务器后锁定为 {@code false}（熔断），防止被外部指令自我解锁。 */
-        public boolean allowPolicyOverride = true;
+    /** 打开安全模块的 AutoConfig 原生配置界面。 */
+    private static void openSecurityConfigGui() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client == null) return;
+        Screen parent = client.currentScreen;
+        client.setScreen(AutoConfig.getConfigScreen(SecurityConfig.class, parent).get());
     }
 }
