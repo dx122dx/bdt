@@ -13,8 +13,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.billy65536.infrastructure.security.SecurityPolicyViolationException;
+import com.billy65536.infrastructure.InfrastructureMod;
 import com.billy65536.infrastructure.security.builtin.ConfigLocker;
+import com.billy65536.infrastructure.security.core.audit.AuditEntry;
+import com.billy65536.infrastructure.security.core.audit.SecurityAuditLog;
+import com.billy65536.infrastructure.security.core.internal.Origin;
 
 /**
  * 通用配置反射访问器，为 {@code /inf config get|set|reset|gui} 与
@@ -26,8 +29,13 @@ import com.billy65536.infrastructure.security.builtin.ConfigLocker;
  * {@link #setValue} 与 {@link #resetValue} 在写入前一律经
  * {@link ConfigLocker#isLocked(String)} 判定，被锁项抛
  * {@link ConfigLockedException}。上层（命令 / GUI / 还原流程）无需、也不应重复检查，
- * 否则既是 WET 又留下漏检通道（历史上 {@code reset} 就因只在命令层检查而可绕过锁定）。
- * 唯一的合法旁路是 {@link #applyLockedValue}，它只能写入锁定表自身声明的强制值。</p>
+ * 否则既是 WET 又留下漏检通道（历史上 {@code reset} 就因只在命令层检查而可绕过锁定）。</p>
+ *
+ * <p>拦截命中时在 {@link com.billy65536.infrastructure.security.core.audit.SecurityAuditLog}
+ * 留档，故本类也是审计流水的唯一记录点。</p>
+ *
+ * <p><b>唯一的合法旁路是 {@link #applyLockedValue}</b>：它只能写入锁定表自身声明的强制值，
+ * 属于框架自身的强制值重放而非用户写入，因此<b>不记审计</b>——否则每次重放都会污染流水。</p>
  *
  * <p>与 chunkscanner 的 {@code ConfigReflectionAccessor}（硬编码 {@code ChunkScannerConfig.class}）不同，
  * 本访问器<b>基于 {@link ConfigDescriptor}</b>：每个模块通过描述符暴露配置实例，
@@ -189,7 +197,7 @@ public final class ConfigAccessor {
             throws ConfigLockedException, ConfigAccessException {
         Object config = requireConfig(descriptor);
         Field[] chain = requireChain(config, path);
-        requireUnlocked(descriptor, path);
+        requireUnlocked(descriptor, path, AuditEntry.Channel.SET, rawValue);
         Field leaf = chain[chain.length - 1];
         write(config, chain, parseValue(leaf.getType(), rawValue, path));
     }
@@ -204,7 +212,7 @@ public final class ConfigAccessor {
             throws ConfigLockedException, ConfigAccessException {
         Object config = requireConfig(descriptor);
         Field[] chain = requireChain(config, path);
-        requireUnlocked(descriptor, path);
+        requireUnlocked(descriptor, path, AuditEntry.Channel.RESET, null);
         Object pristine = pristineOf(config.getClass());
         Object defaultValue = read(pristine, path);
         if (defaultValue == null && pristine == null) {
@@ -223,6 +231,9 @@ public final class ConfigAccessor {
      *
      * <p>强制值约定：{@code null} 表示「仅锁定无强制值」（不写入，返回 null）；
      * 空串 {@code ""} 是合法强制值（会写入空串）。</p>
+     *
+     * <p>本方法<b>刻意不记审计</b>：审计记录的是「被拦下的用户写入」，而这里是框架自身的
+     * 强制值重放，每次配置重载都会大量触发，记录只会淹没真正的拦截事件。</p>
      *
      * @param descriptor 配置描述符（提供活动实例）
      * @param path       字段点分路径
@@ -247,13 +258,39 @@ public final class ConfigAccessor {
         return value;
     }
 
-    /** 安全门禁：目标路径处于锁定之下时拒绝写入。 */
-    private static void requireUnlocked(ConfigDescriptor descriptor, String path)
+    /**
+     * 安全门禁：目标路径处于锁定之下时拒绝写入。
+     *
+     * <p>本方法是配置写入的<b>唯一拦截点</b>，因此也是审计流水的唯一记录点：命中时先
+     * 回查来源，写入审计，再抛出携带真实来源的异常。日志只在审计<b>新增</b>记录时输出，
+     * 被折叠的重复命中（如 GUI 滑块连续拖动）保持静默，避免刷屏。</p>
+     *
+     * @param descriptor     配置描述符
+     * @param path           字段点分路径
+     * @param channel        触发拦截的写入渠道
+     * @param attemptedValue 试图写入的值；{@link AuditEntry.Channel#RESET} 时传 {@code null}
+     * @throws ConfigLockedException 目标路径被锁定（此时审计已记录）；未锁定则静默返回
+     */
+    private static void requireUnlocked(ConfigDescriptor descriptor, String path,
+                                        AuditEntry.Channel channel, String attemptedValue)
             throws ConfigLockedException {
         String fullPath = fullPathOf(descriptor, path);
-        if (ConfigLocker.isLocked(fullPath)) {
-            throw new ConfigLockedException(fullPath);
+        if (!ConfigLocker.isLocked(fullPath)) {
+            return;
         }
+
+        Origin origin = ConfigLocker.getSource(fullPath);
+        boolean fresh = SecurityAuditLog.record(
+                fullPath, origin, ConfigLocker.EXECUTOR_ID, channel, attemptedValue);
+        if (fresh) {
+            InfrastructureMod.LOGGER.warn(
+                    "Security policy blocked a config write: path='{}', channel={}, locked by {}",
+                    fullPath, channel,
+                    (origin == null || origin.isUnknown())
+                            ? ConfigLockedException.UNKNOWN_POLICY
+                            : origin.getPrimary());
+        }
+        throw ConfigLockedException.of(fullPath);
     }
 
     /** 描述符 + 字段点分路径 → 用户可见的完整配置路径（锁定表的 key 形态）。 */

@@ -9,12 +9,18 @@ import net.minecraft.util.Identifier;
  * （例如 {@code ConfigLocker} 是「路径 → 强制值」的映射）。配置本身不含任何可变状态，
  * 所有「合并 / 打补丁」操作都返回<b>新的</b>实例，便于 Manager 在重算时安全地叠加输入。</p>
  *
- * <p>Manager 侧只依赖本接口的三个多态入口，不需要 instanceof 分支即可完成三层合并：</p>
+ * <p><b>设计声明</b>：Manager 侧只依赖本接口的<b>四个</b>多态入口，即可完成三层合并
+ * 与来源回填，<b>无需任何 {@code instanceof} 分支</b>——它自始至终不认识具体配置形状，
+ * 新增执行器配置类型也不必改动 Manager：</p>
  * <ul>
  *   <li>{@link #getExecutorId()} —— 标识这份配置要送给哪个执行器；</li>
  *   <li>{@link #combine(SecurityPolicyConfig)} —— 与另一份同类配置合并（后者覆盖前者）；</li>
- *   <li>{@link #applyPatch(SecurityConfigPatch)} —— 应用一条受控补丁（外部来源的唯一入口）。</li>
+ *   <li>{@link #applyPatch(SecurityConfigPatch)} —— 应用一条受控补丁（外部来源的唯一入口）；</li>
+ *   <li>{@link #withOrigin(Identifier)} —— 合并前回填来源身份，供审计溯源。</li>
  * </ul>
+ *
+ * <p>「同类判定」的责任落在各实现内部（不同类时返回自身），而非上浮到 Manager，
+ * 这正是上述四入口得以保持无分支的前提。</p>
  */
 public interface SecurityPolicyConfig {
 
@@ -42,4 +48,21 @@ public interface SecurityPolicyConfig {
      * @return 应用补丁后的新配置实例
      */
     SecurityPolicyConfig applyPatch(SecurityConfigPatch patch);
+
+    /**
+     * 回填这份配置的来源策略 id，返回打上来源标签的新实例（本实例不被修改）。
+     *
+     * <p><b>框架内部钩子</b>：由 {@code SecurityManager.recompute} 在静态策略层 combine
+     * <i>之前</i>调用，是来源身份的唯一注入点。这样一来安全策略的作者无需感知、也无从
+     * 篡改来源——他们只描述「锁什么、强制成什么」，来源由框架自行认定。</p>
+     *
+     * <p>默认实现返回自身：不承载来源诉求的配置类型无需实现本方法，因此新增本入口
+     * 对既有执行器配置零影响。</p>
+     *
+     * @param policyId 贡献这份配置的策略 id
+     * @return 回填来源后的新配置实例
+     */
+    default SecurityPolicyConfig withOrigin(Identifier policyId) {
+        return this;
+    }
 }

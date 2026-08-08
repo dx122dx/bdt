@@ -69,7 +69,7 @@
     "infrastructure.msg.config_composite_opened": "Opened composite config overview.",
 
     "infrastructure.module.security.name": "Security Manager",
-    "infrastructure.module.security.description": "Hosts the extensible security policy framework. Provides /inf security list|status|active|deactive.",
+    "infrastructure.module.security.description": "Hosts the extensible security policy framework. Provides /inf security list|status|active|deactive|audit.",
 
     "infrastructure.security.policy.server_optin.name": "Server Opt-in",
     "infrastructure.security.policy.server_optin.description": "Locks protected config entries when joining a multiplayer server, until the server grants authorization.",
@@ -102,6 +102,15 @@
     "infrastructure.msg.security.policy_activated": "Security policy %s activated.",
     "infrastructure.msg.security.policy_deactivated": "Security policy %s deactivated.",
     "infrastructure.msg.security.policy_unchanged": "Security policy %s is already %s.",
+    "infrastructure.msg.security.audit_title": "Blocked operations (showing %s of %s):",
+    "infrastructure.msg.security.audit_empty": "(no blocked operations recorded)",
+    "infrastructure.msg.security.audit_channel_set": "[SET]",
+    "infrastructure.msg.security.audit_channel_reset": "[RESET]",
+    "infrastructure.msg.security.audit_locked_by": "locked by %s",
+    "infrastructure.msg.security.audit_unknown_policy": "unknown policy",
+    "infrastructure.msg.security.audit_entry_note": "at %s, %s time(s)",
+    "infrastructure.msg.security.audit_contributors": "(%s more policies contributed)",
+    "infrastructure.msg.security.audit_cleared": "Cleared %s audit records.",
 
     "text.autoconfig.infrastructure-debugger-config.title": "Billy's Mod infrastructure Settings",
     "text.autoconfig.infrastructure-debugger-config.option.verboseLogging": "Verbose Logging",

@@ -243,7 +243,10 @@ public final class SecurityManager {
                 if (!active.contains(p.getId())) continue;
                 for (SecurityPolicyConfig cfg : p.getConfigs()) {
                     if (id.equals(cfg.getExecutorId())) {
-                        base = (base == null) ? cfg : base.combine(cfg);
+                        // 来源回填：静态策略层来源身份的唯一注入点。走接口的多态入口，
+                        // Manager 无需认识任何具体配置形状，策略侧也全程无感知。
+                        SecurityPolicyConfig stamped = cfg.withOrigin(p.getId());
+                        base = (base == null) ? stamped : base.combine(stamped);
                     }
                 }
             }

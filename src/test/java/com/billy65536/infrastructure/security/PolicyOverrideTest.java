@@ -13,11 +13,13 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import com.billy65536.infrastructure.security.builtin.ConfigLockPatch;
+import com.billy65536.infrastructure.security.builtin.ConfigLockerPolicyConfig;
+import com.billy65536.infrastructure.security.core.internal.Origin;
 import com.billy65536.infrastructure.security.core.policy.ActivationTrigger;
 import com.billy65536.infrastructure.security.core.policy.ISecurityExecutor;
 import com.billy65536.infrastructure.security.core.policy.ISecurityPolicy;
 import com.billy65536.infrastructure.security.core.policy.SecurityConfigPatch;
-import com.billy65536.infrastructure.security.SecurityPortal;
 import com.billy65536.infrastructure.security.core.policy.SecurityManager;
 import com.billy65536.infrastructure.security.core.policy.SecurityPolicyConfig;
 
@@ -345,6 +347,158 @@ class PolicyOverrideTest {
             assertEquals(1, bad.calls, "异常执行器仍被调用过一次");
             assertEquals(map("k", "y"), lastOf(good), "后续执行器必须照常收到配置");
             assertTrue(SecurityManager.isActive(policyId), "执行器异常不得回滚策略激活态");
+        }
+    }
+
+    // ==================== 来源自治 ====================
+
+    /**
+     * 来源回填的框架自治行为。
+     *
+     * <p>核心契约：策略侧<b>只写四参 lock、全程不出现 Origin / AttributedValue</b>，
+     * 却能在执行层拿到正确来源。来源注入点唯一且位于框架内部，策略无从感知、无从篡改。</p>
+     */
+    @Nested
+    @DisplayName("来源自治")
+    class OriginBackfill {
+
+        /** 注册一个只用公开四参 API 贡献锁定的策略并激活。 */
+        private LockRecorder registerLockPolicy(Identifier policyId, Identifier exId,
+                                                String dotPath, String value) {
+            LockRecorder ex = new LockRecorder(exId);
+            SecurityPortal.registerExecutor(reg -> reg.register(ex));
+            registerActive(policyId, rebindExecutor(ConfigLockerPolicyConfig
+                    .builder(exId)
+                    .lock("mod", "config", dotPath, value)
+                    .build(), exId));
+            return ex;
+        }
+
+        /** ConfigLockerPolicyConfig 的 executorId 由 builder 指定，此处直接透传。 */
+        private SecurityPolicyConfig rebindExecutor(ConfigLockerPolicyConfig cfg, Identifier exId) {
+            assertEquals(exId, cfg.getExecutorId());
+            return cfg;
+        }
+
+        @Test
+        @DisplayName("策略只写四参 lock，框架自动回填来源")
+        void policyWritesPlainLocks_frameworkBackfillsOrigin() {
+            Identifier exId = nextId("executor");
+            Identifier policyId = nextId("policy");
+            LockRecorder ex = registerLockPolicy(policyId, exId, "a.b", "false");
+
+            Origin origin = ex.originOf("mod:config/a.b");
+            assertNotNull(origin, "策略未感知来源，但框架必须已完成回填");
+            assertEquals(policyId, origin.getPrimary());
+        }
+
+        @Test
+        @DisplayName("多策略锁同一路径：primary 取后注册者，contributors 含全部")
+        void multiplePolicies_shouldMergeOrigins() {
+            Identifier exId = nextId("executor");
+            LockRecorder ex = new LockRecorder(exId);
+            SecurityPortal.registerExecutor(reg -> reg.register(ex));
+
+            Identifier first = nextId("policy");
+            Identifier second = nextId("policy");
+            registerActive(first, ConfigLockerPolicyConfig.builder(exId)
+                    .lock("mod", "config", "a.b", "false").build());
+            registerActive(second, ConfigLockerPolicyConfig.builder(exId)
+                    .lock("mod", "config", "a.b", "true").build());
+
+            Origin origin = ex.originOf("mod:config/a.b");
+            assertEquals(second, origin.getPrimary(), "来源须与值覆盖语义一致，取后者");
+            assertEquals(Set.of(first, second), origin.getContributors());
+            assertEquals("true", ex.valueOf("mod:config/a.b"));
+        }
+
+        @Test
+        @DisplayName("补丁层来源取补丁自带的 policyId")
+        void patchLayer_shouldUsePatchOwnPolicyId() {
+            Identifier exId = nextId("executor");
+            Identifier staticPolicy = nextId("policy");
+            Identifier patchPolicy = nextId("policy");
+            LockRecorder ex = registerLockPolicy(staticPolicy, exId, "a.b", "false");
+
+            ConfigLockPatch.builder(patchPolicy, exId).add("mod:config/a.b", "true").apply();
+
+            assertEquals(patchPolicy, ex.originOf("mod:config/a.b").getPrimary());
+            assertEquals("true", ex.valueOf("mod:config/a.b"));
+        }
+
+        @Test
+        @DisplayName("门控熔断回落 base 时来源同步回落为静态层来源")
+        void gateFallback_shouldRestoreStaticOrigin() {
+            Identifier exId = nextId("executor");
+            Identifier staticPolicy = nextId("policy");
+            Identifier patchPolicy = nextId("policy");
+            LockRecorder ex = registerLockPolicy(staticPolicy, exId, "a.b", "false");
+
+            ConfigLockPatch.builder(patchPolicy, exId).add("mod:config/a.b", "true").apply();
+            assertEquals(patchPolicy, ex.originOf("mod:config/a.b").getPrimary());
+
+            SecurityManager.setOverrideGate(() -> false);
+            SecurityManager.recompute(Set.of(exId));
+
+            assertEquals(staticPolicy, ex.originOf("mod:config/a.b").getPrimary(),
+                    "熔断丢弃补丁后，来源不得残留补丁来源");
+            assertEquals("false", ex.valueOf("mod:config/a.b"));
+        }
+
+        @Test
+        @DisplayName("同一补丁内 remove 优先于 add 的既有语义不受来源改造影响")
+        void patch_removeShouldStillWinOverAdd() {
+            Identifier exId = nextId("executor");
+            Identifier staticPolicy = nextId("policy");
+            Identifier patchPolicy = nextId("policy");
+            LockRecorder ex = registerLockPolicy(staticPolicy, exId, "a.b", "false");
+
+            ConfigLockPatch.builder(patchPolicy, exId)
+                    .add("mod:config/a.b", "true")
+                    .remove("mod:config/a.b")
+                    .apply();
+
+            assertNull(ex.originOf("mod:config/a.b"), "被 remove 的条目应彻底消失");
+        }
+    }
+
+    /** 记录 ConfigLocker 型配置的执行器，用于观测框架回填的来源。 */
+    static final class LockRecorder implements ISecurityExecutor {
+        private final Identifier id;
+        private ConfigLockerPolicyConfig last;
+
+        LockRecorder(Identifier id) {
+            this.id = id;
+        }
+
+        @Override
+        public Identifier getId() {
+            return id;
+        }
+
+        @Override
+        public Text getName() {
+            return Text.literal(id.toString());
+        }
+
+        @Override
+        public Text getDescription() {
+            return Text.literal("recorder");
+        }
+
+        @Override
+        public void onPolicyChanged(SecurityPolicyConfig config) {
+            last = (ConfigLockerPolicyConfig) config;
+        }
+
+        Origin originOf(String fullPath) {
+            if (last == null) return null;
+            var entry = last.getEntries().get(fullPath);
+            return entry == null ? null : entry.getOrigin();
+        }
+
+        String valueOf(String fullPath) {
+            return last == null ? null : last.getLocks().get(fullPath);
         }
     }
 

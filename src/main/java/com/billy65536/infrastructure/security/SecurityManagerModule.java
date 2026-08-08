@@ -44,7 +44,7 @@ public final class SecurityManagerModule implements IModule {
      * <p>与宿主模组的 {@code mod_version} 解耦：模块的演进节奏与 infrastructure 整体发版
      * 无关，改动本模块时手工递增本常量即可，不再随模组元数据漂移。</p>
      */
-    private static final String VERSION = "20260807.2";
+    private static final String VERSION = "20260808.1";
 
     private SecurityConfig config = new SecurityConfig();
 

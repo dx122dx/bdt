@@ -69,7 +69,7 @@
     "infrastructure.msg.config_composite_opened": "已打开复合配置总览界面。",
 
     "infrastructure.module.security.name": "安全管理器",
-    "infrastructure.module.security.description": "承载可拓展安全策略框架。提供 /inf security list|status|active|deactive 命令。",
+    "infrastructure.module.security.description": "承载可拓展安全策略框架。提供 /inf security list|status|active|deactive|audit 命令。",
 
     "infrastructure.security.policy.server_optin.name": "服务端 opt-in",
     "infrastructure.security.policy.server_optin.description": "进入多人服务器时锁定受保护配置项，直至服务端显式授权。",
@@ -102,6 +102,15 @@
     "infrastructure.msg.security.policy_activated": "已激活安全策略 %s。",
     "infrastructure.msg.security.policy_deactivated": "已停用安全策略 %s。",
     "infrastructure.msg.security.policy_unchanged": "安全策略 %s 已经处于 %s 状态。",
+    "infrastructure.msg.security.audit_title": "阻止操作记录（显示 %s 条，共 %s 条）：",
+    "infrastructure.msg.security.audit_empty": "（暂无阻止记录）",
+    "infrastructure.msg.security.audit_channel_set": "[写入]",
+    "infrastructure.msg.security.audit_channel_reset": "[重置]",
+    "infrastructure.msg.security.audit_locked_by": "由 %s 锁定",
+    "infrastructure.msg.security.audit_unknown_policy": "未知策略",
+    "infrastructure.msg.security.audit_entry_note": "于 %s，命中 %s 次",
+    "infrastructure.msg.security.audit_contributors": "（另有 %s 个策略贡献）",
+    "infrastructure.msg.security.audit_cleared": "已清空 %s 条审计记录。",
 
     "text.autoconfig.infrastructure-debugger-config.title": "Billy's Mod infrastructure 设置",
     "text.autoconfig.infrastructure-debugger-config.option.verboseLogging": "详细日志",

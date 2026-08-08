@@ -1,5 +1,8 @@
 package com.billy65536.infrastructure.security;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -8,9 +11,13 @@ import java.util.function.Supplier;
 
 import com.billy65536.infrastructure.InfrastructureMod;
 import com.billy65536.infrastructure.security.builtin.ConfigLocker;
+import com.billy65536.infrastructure.security.core.audit.AuditEntry;
+import com.billy65536.infrastructure.security.core.audit.SecurityAuditLog;
+import com.billy65536.infrastructure.security.core.internal.Origin;
 import com.billy65536.infrastructure.security.core.policy.ISecurityExecutor;
 import com.billy65536.infrastructure.security.core.policy.ISecurityPolicy;
 import com.billy65536.infrastructure.security.core.policy.SecurityManager;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 
@@ -18,6 +25,7 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.command.argument.IdentifierArgumentType;
+import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
@@ -35,11 +43,21 @@ import net.minecraft.util.Identifier;
  *   <li>{@code /inf security status <policy|executor>} —— 展示指定项的完整详情</li>
  *   <li>{@code /inf security active|deactive <policy>} —— 手动激活 / 停用策略，
  *       仅对声明了 {@link ISecurityPolicy#isManuallyToggleable()} 的策略开放</li>
+ *   <li>{@code /inf security audit [count]} —— 列出最近的阻止记录（最新在前），
+ *       不带参数时取 {@value #DEFAULT_AUDIT_LIMIT} 条</li>
+ *   <li>{@code /inf security audit clear} —— 清空审计流水</li>
  * </ul>
  */
 public final class SecurityCommands {
 
     private SecurityCommands() {}
+
+    /** {@code /inf security audit} 不带参数时默认列出的记录条数。 */
+    private static final int DEFAULT_AUDIT_LIMIT = 20;
+
+    /** 审计时间戳的展示格式（本地时区，精确到秒）。 */
+    private static final DateTimeFormatter TIME_FORMAT =
+            DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault());
 
     // ==================== 自动补全 ====================
 
@@ -102,6 +120,15 @@ public final class SecurityCommands {
 
         root.then(toggleNode("active", true));
         root.then(toggleNode("deactive", false));
+
+        root.then(ClientCommandManager.literal("audit")
+                .executes(ctx -> showAudit(ctx.getSource().getClient(), DEFAULT_AUDIT_LIMIT))
+                .then(ClientCommandManager.literal("clear")
+                        .executes(ctx -> clearAudit(ctx.getSource().getClient())))
+                .then(ClientCommandManager.argument("count", IntegerArgumentType.integer(1))
+                        .executes(ctx -> showAudit(
+                                ctx.getSource().getClient(),
+                                IntegerArgumentType.getInteger(ctx, "count")))));
 
         return root;
     }
@@ -255,6 +282,71 @@ public final class SecurityCommands {
         return 1;
     }
 
+    /**
+     * 列出最近若干条阻止记录（最新在前）。
+     *
+     * <p>标题展示「本次列出条数 / 流水现存总条数」；每条附时间、命中次数，
+     * 并在存在多个贡献策略时补注「另有 N 个策略贡献」。</p>
+     *
+     * @param count 期望列出的条数，超出现存条数时按现存条数列出
+     * @return 恒为 1（命令执行成功）
+     */
+    private static int showAudit(MinecraftClient client, int count) {
+        List<AuditEntry> entries = SecurityAuditLog.recent(count);
+        sendMsg(client, Text.translatable("infrastructure.msg.security.audit_title",
+                entries.size(), SecurityAuditLog.size()).formatted(Formatting.GOLD, Formatting.BOLD));
+        if (entries.isEmpty()) {
+            sendMsg(client, indent(Text.translatable("infrastructure.msg.security.audit_empty")));
+            return 1;
+        }
+        for (AuditEntry e : entries) {
+            sendMsg(client, Text.literal("  ")
+                    .append(Text.translatable(channelKey(e.channel())).formatted(Formatting.RED))
+                    .append(Text.literal(" "))
+                    .append(Text.literal(e.fullPath()).formatted(Formatting.DARK_GRAY))
+                    .append(Text.literal(" "))
+                    .append(Text.translatable("infrastructure.msg.security.audit_locked_by",
+                            Text.literal(policyLabel(e)).formatted(Formatting.AQUA))
+                            .formatted(Formatting.GRAY)));
+
+            MutableText note = Text.translatable("infrastructure.msg.security.audit_entry_note",
+                    TIME_FORMAT.format(Instant.ofEpochMilli(e.timestamp())), e.hitCount());
+            int extra = e.origin() == null ? 0 : Math.max(0, e.origin().getContributors().size() - 1);
+            if (extra > 0) {
+                note.append(Text.literal(" "))
+                        .append(Text.translatable("infrastructure.msg.security.audit_contributors", extra));
+            }
+            sendMsg(client, Text.literal("    ").append(note.formatted(Formatting.GRAY)));
+        }
+        return 1;
+    }
+
+    /**
+     * 清空审计流水并回报清除条数。
+     *
+     * @return 恒为 1（命令执行成功）
+     */
+    private static int clearAudit(MinecraftClient client) {
+        int cleared = SecurityAuditLog.clear();
+        sendMsg(client, Text.translatable("infrastructure.msg.security.audit_cleared", cleared)
+                .formatted(Formatting.GREEN));
+        return 1;
+    }
+
+    /** 审计条目的来源策略展示文本；无法归因时给出明确占位。 */
+    private static String policyLabel(AuditEntry e) {
+        Identifier policy = e.policyId();
+        return policy != null ? policy.toString()
+                : Text.translatable("infrastructure.msg.security.audit_unknown_policy").getString();
+    }
+
+    /** 写入渠道对应的翻译键。 */
+    private static String channelKey(AuditEntry.Channel channel) {
+        return channel == AuditEntry.Channel.RESET
+                ? "infrastructure.msg.security.audit_channel_reset"
+                : "infrastructure.msg.security.audit_channel_set";
+    }
+
     // ==================== 辅助 ====================
 
     private static void sendMsg(MinecraftClient client, Text msg) {
@@ -289,12 +381,23 @@ public final class SecurityCommands {
             sendMsg(client, indent(Text.translatable("infrastructure.msg.security.locks_empty")));
             return;
         }
+        var sources = ConfigLocker.getLockSourceSnapshot();
         sendMsg(client, indent(Text.translatable("infrastructure.msg.security.locks_header",
                 snapshot.size())));
-        snapshot.forEach((k, v) -> sendMsg(client, Text.literal("    ")
-                .append(Text.literal(k).formatted(Formatting.DARK_GRAY))
-                .append(Text.literal(" = ").formatted(Formatting.DARK_GRAY))
-                .append(Text.literal(String.valueOf(v)).formatted(Formatting.GRAY))));
+        snapshot.forEach((k, v) -> {
+            MutableText line = Text.literal("    ")
+                    .append(Text.literal(k).formatted(Formatting.DARK_GRAY))
+                    .append(Text.literal(" = ").formatted(Formatting.DARK_GRAY))
+                    .append(Text.literal(String.valueOf(v)).formatted(Formatting.GRAY));
+            Origin origin = sources.get(k);
+            if (origin != null && !origin.isUnknown()) {
+                line.append(Text.literal(" "))
+                        .append(Text.translatable("infrastructure.msg.security.audit_locked_by",
+                                Text.literal(origin.getPrimary().toString()).formatted(Formatting.AQUA))
+                                .formatted(Formatting.DARK_GRAY));
+            }
+            sendMsg(client, line);
+        });
     }
 
     /** 统一的「未找到」提示。 */

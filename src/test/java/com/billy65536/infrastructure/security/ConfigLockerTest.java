@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.billy65536.infrastructure.core.config.ConfigAccessor;
 import com.billy65536.infrastructure.core.config.ConfigAccessException;
@@ -20,9 +21,14 @@ import com.billy65536.infrastructure.core.module.IModule;
 import com.billy65536.infrastructure.core.module.ModuleRegistry;
 import com.billy65536.infrastructure.security.builtin.ConfigLocker;
 import com.billy65536.infrastructure.security.builtin.ConfigLockerPolicyConfig;
+import com.billy65536.infrastructure.security.core.audit.AuditEntry;
+import com.billy65536.infrastructure.security.core.audit.SecurityAuditLog;
+import com.billy65536.infrastructure.security.core.internal.Origin;
+import com.billy65536.infrastructure.security.core.policy.SecurityPolicyConfig;
 
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 
@@ -516,6 +522,128 @@ class ConfigLockerTest {
 
             assertEquals(Boolean.FALSE, written);
             assertFalse(config.components.qshop.highlightEnabled);
+        }
+    }
+
+    // ==================== 来源溯源 ====================
+
+    @Nested
+    @DisplayName("来源溯源")
+    class SourceTracking {
+
+        private static final Identifier POLICY_A = new Identifier("test", "policy-a");
+        private static final Identifier POLICY_B = new Identifier("test", "policy-b");
+
+        /** 模拟框架回填来源后再物化，验证执行层能取回来源。 */
+        private void applyWithOrigin(String value, Identifier policyId) {
+            SecurityPolicyConfig cfg = ConfigLockerPolicyConfig.builder(ConfigLocker.EXECUTOR_ID)
+                    .lock(MODULE, SEGMENT, QSHOP_HIGHLIGHT, value)
+                    .build()
+                    .withOrigin(policyId);
+            ConfigLocker.getInstance().onPolicyChanged(cfg);
+        }
+
+        @Test
+        @DisplayName("单策略锁定后可回查到该策略为来源")
+        void singlePolicy_shouldBeTraceable() {
+            applyWithOrigin("false", POLICY_A);
+
+            Origin origin = ConfigLocker.getSource(QSHOP_HIGHLIGHT_FULL);
+            assertNotNull(origin);
+            assertEquals(POLICY_A, origin.getPrimary());
+            assertEquals(Set.of(POLICY_A), origin.getContributors());
+        }
+
+        @Test
+        @DisplayName("多策略锁同一路径：primary 取后者，contributors 含全部")
+        void multiplePolicies_shouldKeepLatestPrimaryAndAllContributors() {
+            SecurityPolicyConfig a = ConfigLockerPolicyConfig.builder(ConfigLocker.EXECUTOR_ID)
+                    .lock(MODULE, SEGMENT, QSHOP_HIGHLIGHT, "false").build().withOrigin(POLICY_A);
+            SecurityPolicyConfig b = ConfigLockerPolicyConfig.builder(ConfigLocker.EXECUTOR_ID)
+                    .lock(MODULE, SEGMENT, QSHOP_HIGHLIGHT, "true").build().withOrigin(POLICY_B);
+            ConfigLocker.getInstance().onPolicyChanged(a.combine(b));
+
+            Origin origin = ConfigLocker.getSource(QSHOP_HIGHLIGHT_FULL);
+            assertEquals(POLICY_B, origin.getPrimary(), "最终生效来源应与值覆盖语义一致，取后者");
+            assertEquals(Set.of(POLICY_A, POLICY_B), origin.getContributors());
+            assertEquals("true", ConfigLocker.getForcedValue(QSHOP_HIGHLIGHT_FULL));
+        }
+
+        @Test
+        @DisplayName("来源变更不刷新原值快照（铁律回归）")
+        void originUpdate_shouldNotRefreshOriginalSnapshot() {
+            config.components.qshop.highlightEnabled = true; // 玩家本地值
+            applyWithOrigin("false", POLICY_A);              // 抓快照 = true
+            config.components.qshop.highlightEnabled = true;
+            applyWithOrigin("false", POLICY_B);              // 换来源，快照不得刷新
+
+            assertEquals(POLICY_B, ConfigLocker.getSource(QSHOP_HIGHLIGHT_FULL).getPrimary());
+            unlock(QSHOP_HIGHLIGHT_FULL);
+            assertTrue(config.components.qshop.highlightEnabled,
+                    "来源刷新不得连带刷新原值快照，否则解锁后回不到玩家真实设置");
+        }
+
+        @Test
+        @DisplayName("解锁后 getSource 返回 null")
+        void afterUnlock_getSourceShouldReturnNull() {
+            applyWithOrigin("false", POLICY_A);
+            unlock(QSHOP_HIGHLIGHT_FULL);
+
+            assertNull(ConfigLocker.getSource(QSHOP_HIGHLIGHT_FULL));
+        }
+
+        @Test
+        @DisplayName("null 值（仅锁定）与空串（强制空值）经来源包装后仍严格区分")
+        void nullAndEmptyValue_shouldRemainDistinctAfterWrapping() {
+            String emptyPath = ConfigPath.of(MODULE, SEGMENT, "components.qshop.sellKeyword").toString();
+            SecurityPolicyConfig cfg = ConfigLockerPolicyConfig.builder(ConfigLocker.EXECUTOR_ID)
+                    .lock(MODULE, SEGMENT, QSHOP_HIGHLIGHT, null)
+                    .lock(MODULE, SEGMENT, "components.qshop.sellKeyword", "")
+                    .build()
+                    .withOrigin(POLICY_A);
+            ConfigLocker.getInstance().onPolicyChanged(cfg);
+
+            assertTrue(ConfigLocker.isLocked(QSHOP_HIGHLIGHT_FULL));
+            assertNull(ConfigLocker.getForcedValue(QSHOP_HIGHLIGHT_FULL));
+            assertTrue(ConfigLocker.isLocked(emptyPath));
+            assertEquals("", ConfigLocker.getForcedValue(emptyPath));
+        }
+
+        @Test
+        @DisplayName("拦截异常携带真实 policy id，不再是 unknown")
+        void blockedWrite_exceptionShouldCarryRealPolicy() {
+            applyWithOrigin("false", POLICY_A);
+
+            ConfigLockedException ex = assertThrows(ConfigLockedException.class,
+                    () -> ConfigAccessor.setValue(descriptor, QSHOP_HIGHLIGHT, "true"));
+
+            assertEquals(POLICY_A.toString(), ex.getViolatedPolicy());
+            assertEquals(ConfigLocker.EXECUTOR_ID.toString(), ex.getOriginExecutor());
+        }
+
+        @Test
+        @DisplayName("拦截会写入审计流水，applyLockedValue 的误用不会")
+        void blockedWrite_shouldBeAudited_butNotApplyLockedValue() {
+            SecurityAuditLog.clear();
+            applyWithOrigin("false", POLICY_A);
+
+            assertThrows(ConfigLockedException.class,
+                    () -> ConfigAccessor.setValue(descriptor, QSHOP_HIGHLIGHT, "true"));
+            assertEquals(1, SecurityAuditLog.size());
+
+            AuditEntry entry = SecurityAuditLog.recent(1).get(0);
+            assertEquals(QSHOP_HIGHLIGHT_FULL, entry.fullPath());
+            assertEquals(POLICY_A, entry.policyId());
+            assertEquals(AuditEntry.Channel.SET, entry.channel());
+            assertEquals("true", entry.attemptedValue());
+
+            // applyLockedValue 是合法旁路，其「路径未锁定」异常属调用方误用，不得混入审计
+            String unlockedPath = "scanner.maxTasksPerTick";
+            assertThrows(ConfigAccessException.class,
+                    () -> ConfigAccessor.applyLockedValue(descriptor, unlockedPath));
+            assertEquals(1, SecurityAuditLog.size(), "合法旁路的误用不是阻止操作，不得记入审计");
+
+            SecurityAuditLog.clear();
         }
     }
 

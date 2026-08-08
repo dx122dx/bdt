@@ -19,6 +19,8 @@ import com.billy65536.infrastructure.core.config.ConfigManager;
 import com.billy65536.infrastructure.core.config.ConfigPath;
 import com.billy65536.infrastructure.core.module.IModule;
 import com.billy65536.infrastructure.core.module.ModuleRegistry;
+import com.billy65536.infrastructure.security.core.internal.AttributedValue;
+import com.billy65536.infrastructure.security.core.internal.Origin;
 import com.billy65536.infrastructure.security.core.policy.ISecurityExecutor;
 import com.billy65536.infrastructure.security.core.policy.SecurityManager;
 import com.billy65536.infrastructure.security.core.policy.SecurityPolicyConfig;
@@ -48,16 +50,22 @@ import net.minecraft.util.Identifier;
  *
  * <p>原 {@code lockStatus / defaultLocks / preLockValues} 三张平行表合并为单张
  * {@link #activeConstraints}（{@code Map<String, LockConstraint>}）。{@code LockConstraint}
- * 聚合完整路径 / 强制值 / 原值快照，在 {@link #onPolicyChanged} 内一次性 diff：</p>
+ * 聚合完整路径 / 强制值 / 原值快照 / 来源身份，在 {@link #onPolicyChanged} 内一次性 diff：</p>
  * <ul>
  *   <li>目标有、当前无 → 抓原值快照，建立约束；</li>
  *   <li>目标无、当前有 → 用快照还原并 {@code saveConfig} 持久化，移除约束；</li>
- *   <li>两者都有但强制值变化 → 保留原快照（绝不刷新），更新强制值；</li>
+ *   <li>两者都有但强制值 / 来源变化 → 保留原快照（绝不刷新），更新强制值与来源；</li>
  *   <li>最后统一 {@link #applyAllRegistered()} 重放。</li>
  * </ul>
  *
- * <p>次序硬约束：必须先更新 {@code activeConstraints} 再执行还原，否则还原过程中被触发的
- * {@code applyAll} 会把强制值又写回去。</p>
+ * <h2>来源溯源</h2>
+ *
+ * <p>每条约束携带框架回填的来源身份，{@link #getSource(String)} 据此让配置门禁在拦截时
+ * 精确报出「这条路径是被哪个策略锁的」。来源全程由框架自动附加，锁定策略的编写者无需感知。</p>
+ *
+ * <p><b>次序硬约束</b>：还原消失的锁时，必须<b>先</b>把约束从 {@link #activeConstraints}
+ * 移除，<b>再</b>写回原值。次序颠倒的话，写回过程中触发的 {@code applyAll}（及写入门禁）
+ * 会把强制值又盖回去，原值永远还不回来。</p>
  *
  * <p>默认锁不再由本类自持，而是作为 {@link ServerOptinPolicy} 的静态配置片段，
  * 经 {@link com.billy65536.infrastructure.security.SecurityPortal} 注入。</p>
@@ -78,9 +86,12 @@ public final class ConfigLocker implements ISecurityExecutor {
     /**
      * 当前生效的约束表：完整路径 → 约束。
      *
-     * <p>由连接事件线程（{@link #onPolicyChanged}）与配置线程（{@link #applyAll}）访问。
-     * value 允许为 {@code null}（「仅锁定无强制值」），故用 {@code LinkedHashMap}；
-     * 本类运行在客户端主线程，集合为普通非同步实现。</p>
+     * <p>value 为 {@link LockConstraint}，<b>永不为 {@code null}</b>；「仅锁定无强制值」
+     * 表达为约束内部的 {@code forcedValue == null}。用 {@code LinkedHashMap} 保序，
+     * 使快照与命令输出的顺序稳定。</p>
+     *
+     * <p>本类假定只在客户端主线程访问（策略变更与配置读写均在主线程），
+     * 故集合为普通非同步实现。</p>
      */
     private static final Map<String, LockConstraint> activeConstraints = new LinkedHashMap<>();
 
@@ -120,28 +131,34 @@ public final class ConfigLocker implements ISecurityExecutor {
      */
     @Override
     public void onPolicyChanged(SecurityPolicyConfig raw) {
-        Map<String, String> target = (raw == null)
+        Map<String, AttributedValue<String>> target = (raw == null)
                 ? Map.of()
-                : ((ConfigLockerPolicyConfig) raw).getLocks();
+                : ((ConfigLockerPolicyConfig) raw).getEntries();
         diffAndApply(target);
     }
 
     // ==================== diff 物化 ====================
 
     /**
-     * 按目标锁表 diff 当前 {@link #activeConstraints}：新增即抓快照施加、消失即还原、
-     * 强制值变化即重放；末尾重放全部当前强制值并（若策略仍激活）补发锁定事件。
+     * 按目标锁表 diff 当前 {@link #activeConstraints}：新增即抓原值快照并建立约束、
+     * 消失即还原并移除、已有项则更新强制值与来源（<b>原值快照始终沿用</b>）；
+     * 末尾重放全部当前强制值，并在策略仍激活时补发锁定事件。
+     *
+     * @param target 目标锁表（路径 → 带来源的强制值）；空表等价于释放全部约束
      */
-    private static void diffAndApply(Map<String, String> target) {
-        // 1) 先更新 activeConstraints：新增抓原值快照，已有则更新强制值（保留原快照）
-        for (Entry<String, String> e : target.entrySet()) {
+    private static void diffAndApply(Map<String, AttributedValue<String>> target) {
+        // 1) 先更新 activeConstraints：新增抓原值快照，已有则只更新强制值与来源
+        //    （保留原快照——铁律，绝不刷新，否则解锁后回不到玩家真实设置）
+        for (Entry<String, AttributedValue<String>> e : target.entrySet()) {
             String path = e.getKey();
-            String forced = e.getValue();
+            AttributedValue<String> entry = e.getValue();
+            String forced = entry.getValue();
+            Origin origin = entry.getOrigin();
             LockConstraint existing = activeConstraints.get(path);
             if (existing == null) {
-                activeConstraints.put(path, new LockConstraint(path, forced, readCurrent(path)));
+                activeConstraints.put(path, new LockConstraint(path, forced, readCurrent(path), origin));
             } else {
-                activeConstraints.put(path, new LockConstraint(path, forced, existing.originalValue()));
+                activeConstraints.put(path, new LockConstraint(path, forced, existing.originalValue(), origin));
             }
         }
 
@@ -194,6 +211,34 @@ public final class ConfigLocker implements ISecurityExecutor {
         Map<String, String> snap = new LinkedHashMap<>();
         for (LockConstraint c : activeConstraints.values()) {
             snap.put(c.fullPath(), c.forcedValue());
+        }
+        return snap;
+    }
+
+    /**
+     * 查询某完整配置路径的锁定来源。
+     *
+     * <p>门禁拦截时据此把「被谁锁的」写进异常与审计流水，替代过去只能报
+     * 「来源未知」的窘境。</p>
+     *
+     * @param fullPath 完整配置路径
+     * @return 来源身份；路径未被锁定时返回 {@code null}
+     * @apiNote 返回框架内部类型 {@link Origin}，下游模组不得引用。
+     */
+    public static Origin getSource(String fullPath) {
+        LockConstraint c = activeConstraints.get(fullPath);
+        return c == null ? null : c.origin();
+    }
+
+    /**
+     * 当前锁定来源快照（完整路径 → 来源）。独立副本，调用方可自由修改。
+     *
+     * @apiNote 暴露框架内部类型 {@link Origin}，下游模组不得引用。
+     */
+    public static Map<String, Origin> getLockSourceSnapshot() {
+        Map<String, Origin> snap = new LinkedHashMap<>();
+        for (LockConstraint c : activeConstraints.values()) {
+            snap.put(c.fullPath(), c.origin());
         }
         return snap;
     }
