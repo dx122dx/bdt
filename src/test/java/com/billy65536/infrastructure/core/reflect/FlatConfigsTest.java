@@ -221,4 +221,104 @@ class FlatConfigsTest {
             }
         }
     }
+
+    /** 自定义序列化夹具：实现 {@link FlatConfigs.Serializable}，serialize 输出 {@code v:<value>}。 */
+    @SuppressWarnings("unused")
+    static final class Tag implements FlatConfigs.Serializable {
+        public String value;
+
+        Tag() {}
+
+        Tag(String value) { this.value = value; }
+
+        @Override
+        public String serialize() {
+            return "v:" + (value == null ? "" : value);
+        }
+
+        public static Tag deserialize(String raw) {
+            // 还原到可无损 serialize 的字符串：必须以 "v:" 前缀回写
+            if (!raw.startsWith("v:")) {
+                throw new IllegalArgumentException("Tag expects 'v:' prefix, got: " + raw);
+            }
+            return new Tag(raw.substring(2));
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return value == null || value.isEmpty();
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof Tag t)) return false;
+            return value == null ? t.value == null : value.equals(t.value);
+        }
+
+        @Override
+        public int hashCode() {
+            return value == null ? 0 : value.hashCode();
+        }
+    }
+
+    /** 含 Serializable 字段的扁平配置夹具。 */
+    @SuppressWarnings("unused")
+    static final class CustomConfig {
+        @FlatConfigs.Key("name")
+        public String name;
+
+        @FlatConfigs.Key("tag")
+        public Tag tag;
+
+        CustomConfig() {}
+    }
+
+    @Nested
+    @DisplayName("自定义 Serializable 类型")
+    class CustomTypeTests {
+        @Test
+        @DisplayName("createFrom 经 deserialize 还原、toString 经 serialize 输出")
+        void parseAndRender() {
+            CustomConfig c = FlatConfigs.createFrom("name=bob tag=v:VIP", CustomConfig.class);
+            assertNotNull(c);
+            assertEquals("bob", c.name);
+            assertEquals("VIP", c.tag.value);
+            // toString 应渲染 serialize 输出
+            assertEquals("name=bob tag=v:VIP", FlatConfigs.toString(c));
+        }
+
+        @Test
+        @DisplayName("createFrom ↔ toString 往返无损")
+        void roundTrip() {
+            CustomConfig c = FlatConfigs.createFrom("name=bob tag=v:VIP", CustomConfig.class);
+            CustomConfig c2 = FlatConfigs.createFrom(FlatConfigs.toString(c), CustomConfig.class);
+            assertEquals(c.name, c2.name);
+            assertEquals(c.tag.value, c2.tag.value);
+        }
+
+        @Test
+        @DisplayName("isAllNull 对 Serializable 字段按 isEmpty 判定")
+        void isAllNullWithEmpty() {
+            CustomConfig c = new CustomConfig();
+            c.name = "x";
+            c.tag = new Tag(""); // isEmpty()==true
+            // tag 为空，但 name 非空 → 整体非 allNull
+            assertFalse(FlatConfigs.isAllNull(c));
+            c.name = null;
+            c.tag = new Tag(""); // 两个皆空
+            assertTrue(FlatConfigs.isAllNull(c));
+            c.tag = new Tag("VIP"); // tag 非空
+            assertFalse(FlatConfigs.isAllNull(c));
+        }
+
+        @Test
+        @DisplayName("deserialize 抛异常被容错 warn 跳过该键")
+        void deserializeFailureSkipped() {
+            CustomConfig c = FlatConfigs.createFrom("name=bob tag=badFormat", CustomConfig.class);
+            assertNotNull(c);
+            assertEquals("bob", c.name);
+            assertNull(c.tag); // 解析失败该键跳过
+        }
+    }
 }

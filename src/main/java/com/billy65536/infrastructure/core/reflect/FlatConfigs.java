@@ -35,11 +35,19 @@ import com.billy65536.infrastructure.core.cli.ArgParser;
  * <h2>行为契约</h2>
  * <ul>
  *   <li>字段类型为 public、非 static、非 transient、非 synthetic 才纳入（与 ConfigAccessor 同规则）。</li>
- *   <li>非叶子字段（嵌套 POJO）记警告并跳过，不递归展开（扁平约束）。</li>
+ *   <li>非叶子字段（未实现 {@link Serializable} 的嵌套 POJO）记警告并跳过，不递归展开（扁平约束）。</li>
  *   <li>解析容错：未知键、数值格式错误均记警告并跳过，不中断整体解析。</li>
- *   <li>解析结果若全部字段为 null，返回 null，表示「无需配置」。</li>
+ *   <li>解析结果若全部字段为 null/空，返回 null，表示「无需配置」。</li>
  *   <li>键名匹配大小写不敏感。</li>
  * </ul>
+ *
+ * <h2>自定义类型约束</h2>
+ *
+ * <p>除基本类型/枚举/String 外，字段类型可实现嵌套接口 {@link Serializable} 以声明自定义序列化。
+ * 实现类须保证 <b>往返无损</b>：对任意实例 {@code x}，{@code deserialize(serialize(x)).equals(x)}
+ * （或语义等价）。由于底层以 {@code key=value} 扁平语法分词（{@link com.billy65536.infrastructure.core.cli.ArgParser}
+ * 按首个 {@code =} 与空白切分），实现类的 {@link Serializable#serialize()} 输出<b>不得含未转义的
+ * {@code =} 或空白</b>——否则会被误切断。确需嵌套含 {@code =}/空格 的值时，必须整体以引号包裹。</p>
  */
 public final class FlatConfigs {
     /**
@@ -68,6 +76,52 @@ public final class FlatConfigs {
         String display() default "";
     }
 
+    /**
+     * 自定义序列化契约，供 {@link FlatConfigs} 处理「非基本类型」的字段。
+     *
+     * <p>当某字段类型既非基本类型/包装/枚举/String，又<b>未实现本接口</b>时，{@link FlatConfigs}
+     * 会视其为不支持的嵌套类型（记警告并跳过，或解析期抛异常）。实现本接口即可让该字段被
+     * 反射工具正确解析、格式化与判空。</p>
+     *
+     * <h2>往返无损（强制）</h2>
+     * <p>实现类必须保证对任意实例 {@code x} 有 {@code deserialize(serialize(x))} 与 {@code x} 语义等价
+     * （通常配合 {@code equals} 重写）。这是 {@link FlatConfigs#toString} → {@link FlatConfigs#createFrom}
+     * 往返一致性的前提。</p>
+     *
+     * <h2>输出约束</h2>
+     * <p>{@link #serialize()} 的输出<b>不得含未转义的 {@code =} 或空白</b>——底层按 {@code key=value}
+     * 扁平语法分词，含此类字符会被切断。需表达含 {@code =}/空格 的值时，实现类应自负责转义，
+     * 或要求调用方以引号包裹。</p>
+     *
+     * <p>{@link #copy()}/{@link #merge(FlatConfigs.Serializable)} 为辅助能力，供有需要的子类使用；
+     * {@link FlatConfigs} 自有的 {@code copy}/{@code merge} 走反射，不依赖这两个方法。</p>
+     */
+    public interface Serializable {
+        /** 序列化为单行字符串（不得含未转义的 {@code =} 或空白）。 */
+        String serialize();
+
+        /**
+         * 从单行字符串还原实例；解析失败抛 {@link IllegalArgumentException}。
+         * 由 {@link FlatConfigs} 经反射调用（签名须为 {@code static X deserialize(String)}）。
+         */
+        static <T extends Serializable> T deserialize(String raw) {
+            throw new UnsupportedOperationException(
+                    "FlatConfigs.Serializable.deserialize must be overridden by a static method on the impl class");
+        }
+
+        /** 是否为空/未设置；供 {@link FlatConfigs#isAllNull} 判定（默认=空语义与 String==null 一致）。 */
+        boolean isEmpty();
+
+        /** 返回独立副本（辅助能力，供有需要的类使用）。 */
+        default Serializable copy() {
+            throw new UnsupportedOperationException("copy not supported");
+        }
+
+        /** 合并其它实例的非空字段（辅助能力，供有需要的类使用）。 */
+        default Serializable merge(Serializable other) {
+            throw new UnsupportedOperationException("merge not supported");
+        }
+    }
 
     private FlatConfigs() {}
 
@@ -139,14 +193,15 @@ public final class FlatConfigs {
         return java.util.Collections.unmodifiableMap(out);
     }
 
-    /** 叶子类型判定：基本类型、包装类、String、枚举。 */
+    /** 叶子类型判定：基本类型、包装类、String、枚举，或实现了 {@link Serializable} 的自定义类型。 */
     private static boolean isLeaf(Class<?> t) {
         return t.isPrimitive()
                 || t.isEnum()
                 || t == String.class
                 || t == Integer.class || t == Long.class || t == Double.class
                 || t == Float.class || t == Short.class || t == Byte.class
-                || t == Boolean.class || t == Character.class;
+                || t == Boolean.class || t == Character.class
+                || Serializable.class.isAssignableFrom(t);
     }
 
     // ==================== 公开 API ====================
@@ -216,6 +271,11 @@ public final class FlatConfigs {
                 LogHolder.LOGGER.warn(
                         "FlatConfigs: invalid value '{}' for key '{}' on {}: {}",
                         a.value, a.key, type.getSimpleName(), e.getMessage());
+            } catch (IllegalStateException e) {
+                // 不支持的字段类型等编程期错误，记警告并跳过该键，不中断整体解析
+                LogHolder.LOGGER.warn(
+                        "FlatConfigs: cannot parse key '{}' on {}: {}",
+                        a.key, type.getSimpleName(), e.getMessage());
             } catch (IllegalAccessException e) {
                 throw new IllegalStateException("FlatConfigs: failed to set field " + m.field.getName(), e);
             }
@@ -223,7 +283,7 @@ public final class FlatConfigs {
         return anySet ? instance : null;
     }
 
-    /** 反向输出为紧凑单行 {@code key=value key=value}（按字段声明顺序，用展示键）。全 null 返回空串。 */
+    /** 反向输出为紧凑单行 {@code key=value key=value}（按字段声明顺序，用展示键）。全空返回空串。 */
     public static String toString(Object obj) {
         if (obj == null) return "";
         Map<String, FieldMeta> meta = metaOf(obj.getClass());
@@ -231,9 +291,9 @@ public final class FlatConfigs {
         for (FieldMeta m : meta.values()) {
             try {
                 Object v = m.field.get(obj);
-                if (v != null) {
-                    sb.append(m.display).append('=').append(v).append(' ');
-                }
+                if (v == null) continue;
+                String rendered = (v instanceof Serializable s) ? s.serialize() : String.valueOf(v);
+                sb.append(m.display).append('=').append(rendered).append(' ');
             } catch (IllegalAccessException e) {
                 throw new IllegalStateException("FlatConfigs: failed to read field " + m.field.getName(), e);
             }
@@ -241,12 +301,18 @@ public final class FlatConfigs {
         return sb.toString().trim();
     }
 
-    /** 判断全部纳入字段是否均为 null。 */
+    /** 判断全部纳入字段是否均为 null/空（自定义类型按 {@link Serializable#isEmpty} 判定）。 */
     public static boolean isAllNull(Object obj) {
         if (obj == null) return true;
         for (FieldMeta m : metaOf(obj.getClass()).values()) {
             try {
-                if (m.field.get(obj) != null) return false;
+                Object v = m.field.get(obj);
+                if (v == null) continue;
+                if (v instanceof Serializable s) {
+                    if (!s.isEmpty()) return false;
+                } else {
+                    return false;
+                }
             } catch (IllegalAccessException e) {
                 throw new IllegalStateException("FlatConfigs: failed to read field " + m.field.getName(), e);
             }
@@ -283,6 +349,7 @@ public final class FlatConfigs {
     }
 
     /** 将字符串按目标字段类型转换；数值型先 trim，String 原样保留。 */
+    @SuppressWarnings("unchecked")
     private static Object convert(Class<?> type, String raw) {
         if (type == String.class) return raw;
         String s = raw.trim();
@@ -302,7 +369,22 @@ public final class FlatConfigs {
             Object e = Enum.valueOf((Class<? extends Enum>) type, s);
             return e;
         }
-        // 其它类型（如自定义 POJO）不支持，交由上层；此处按 String 兜底
-        return raw;
+        if (Serializable.class.isAssignableFrom(type)) {
+            try {
+                java.lang.reflect.Method m = type.getMethod("deserialize", String.class);
+                return m.invoke(null, raw);
+            } catch (NoSuchMethodException e) {
+                throw new IllegalStateException(
+                        "FlatConfigs: " + type.getName() + " implements Serializable but lacks static deserialize(String)", e);
+            } catch (java.lang.reflect.InvocationTargetException e) {
+                // 还原实现类抛出的 IllegalArgumentException，让上层按格式错误容错处理
+                Throwable cause = e.getCause();
+                throw new NumberFormatException(cause != null ? cause.getMessage() : "deserialize failed");
+            } catch (IllegalAccessException e) {
+                throw new IllegalStateException("FlatConfigs: cannot access deserialize on " + type.getName(), e);
+            }
+        }
+        // 其它类型（如未实现 Serializable 的嵌套 POJO）不支持
+        throw new IllegalStateException("FlatConfigs: unsupported field type " + type.getName());
     }
 }
