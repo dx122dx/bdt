@@ -49,7 +49,7 @@ public final class SecurityContext {
      * @param executorId  目标执行器 id
      * @return 该 Config 类型的补丁修改器
      */
-    public ConfigLockPatch.Builder overrides(Identifier policyId, Identifier executorId) {
+    ConfigLockPatch.Builder overrides(Identifier policyId, Identifier executorId) {
         return ConfigLockPatch.builder(policyId, executorId);
     }
 
@@ -64,7 +64,7 @@ public final class SecurityContext {
     }
 
     /** 清空全部补丁（断连场景：如退出服务器时丢弃所有外部覆盖）。 */
-    public void clearPatches() {
+    void clearPatches() {
         patches.clear();
     }
 

@@ -7,7 +7,7 @@ import java.util.Set;
 import com.billy65536.infrastructure.InfrastructureMod;
 import com.billy65536.infrastructure.security.core.policy.ActivationTrigger;
 import com.billy65536.infrastructure.security.core.policy.ISecurityPolicy;
-import com.billy65536.infrastructure.security.core.policy.SecurityManager;
+import com.billy65536.infrastructure.security.core.policy.RegistrationCoordinator;
 import com.billy65536.infrastructure.security.core.policy.SecurityPolicyConfig;
 
 import net.fabricmc.fabric.api.event.Event;
@@ -22,10 +22,10 @@ import net.minecraft.util.Identifier;
  * 注入的默认受保护配置项全部锁定，等待服务端显式授权后方可放开；断开连接时释放全部锁定。
  * 实际动作由下辖的 {@link ConfigLocker} 执行。</p>
  *
- * <p>本策略允许手动开关（{@link #isManuallyToggleable()} 为 {@code true}），以便调试模组与
- * 玩家在必要时经 {@code /inf security active|deactive security:server-optin} 模拟进出服务器
- * 的锁定行为。手动通路与框架自动判定共用
- * {@link SecurityManager#setActive(Identifier, boolean)}，行为完全一致。</p>
+ * <p>本策略<b>不可手动开关</b>（{@link #isManuallyToggleable()} 取基类默认 {@code false}）：
+ * 进入 / 离开多人服务器完全由框架生命周期（{@link ActivationTrigger#MULTIPLAYER_JOIN}）驱动，
+ * 玩家或服务端指令均无法自行解除其施加的锁定——这正是「服务端 opt-in 不得手动更改」的硬约束。
+ * 仅框架内部经 {@code SecurityPortal#activatePolicyInternal} 在断连时释放锁定。</p>
  *
  * <h2>子事件</h2>
  *
@@ -99,11 +99,6 @@ public final class ServerOptinPolicy implements ISecurityPolicy {
     }
 
     @Override
-    public boolean isManuallyToggleable() {
-        return true;
-    }
-
-    @Override
     public Collection<SecurityPolicyConfig> getConfigs() {
         return List.of(staticConfig);
     }
@@ -120,7 +115,7 @@ public final class ServerOptinPolicy implements ISecurityPolicy {
             return false;
         }
         staticConfig = (ConfigLockerPolicyConfig) staticConfig.combine(clc);
-        SecurityManager.recompute(Set.of(ConfigLocker.EXECUTOR_ID));
+        RegistrationCoordinator.recomputeNow(Set.of(ConfigLocker.EXECUTOR_ID));
         return true;
     }
 

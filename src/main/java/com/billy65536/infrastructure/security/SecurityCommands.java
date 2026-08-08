@@ -244,7 +244,7 @@ public final class SecurityCommands {
     /** 展示 Override 补丁数量与门控状态（熔断诊断）。 */
     private static void sendOverrideDiagnostics(MinecraftClient client) {
         sendMsg(client, indent(Text.translatable("infrastructure.msg.security.field_override_patches")
-                .append(Text.literal(String.valueOf(SecurityManager.getContext().patchCount()))
+                .append(Text.literal(String.valueOf(SecurityPortal.getContext().patchCount()))
                         .formatted(Formatting.AQUA))));
         sendMsg(client, indent(Text.translatable("infrastructure.msg.security.field_override_allowed")
                 .append(boolText(SecurityManager.isOverrideAllowed()))));
@@ -266,7 +266,7 @@ public final class SecurityCommands {
                     Text.literal(id.toString()).formatted(Formatting.GOLD)).formatted(Formatting.RED));
             return 0;
         }
-        boolean changed = SecurityManager.setActive(id, value);
+        boolean changed = SecurityPortal.activatePolicy(id, value);
         if (!changed) {
             sendMsg(client, Text.translatable("infrastructure.msg.security.policy_unchanged",
                             Text.literal(id.toString()).formatted(Formatting.GOLD),

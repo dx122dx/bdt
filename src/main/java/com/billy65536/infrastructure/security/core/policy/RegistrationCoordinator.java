@@ -1,7 +1,9 @@
 package com.billy65536.infrastructure.security.core.policy;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.function.Supplier;
 
 import com.billy65536.infrastructure.InfrastructureMod;
 
@@ -63,6 +65,43 @@ public final class RegistrationCoordinator {
             }
         }
         pendingInjections.clear();
+    }
+
+    // ===== 受控写入口桥接（供 SecurityPortal 与同仓 builtin 包经本编排器触达 SecurityManager 私有方法） =====
+
+    /** 受控入口：手动设置策略激活态（含不可手动开关策略的停用拦截）。 */
+    public static boolean setActiveNow(Identifier id, boolean value) {
+        return SecurityManager.setActive(id, value);
+    }
+
+    /** 框架生命周期入口：绕过手动开关限制（断连释放等生命周期驱动场景）。 */
+    public static boolean setActiveInternalNow(Identifier id, boolean value) {
+        return SecurityManager.setActiveInternal(id, value);
+    }
+
+    /** 登记一条 Override 补丁。 */
+    public static void submitPatchNow(SecurityConfigPatch patch) {
+        SecurityManager.submitPatch(patch);
+    }
+
+    /** 设置覆盖门控（熔断定）。 */
+    public static void setGateNow(Supplier<Boolean> gate) {
+        SecurityManager.setOverrideGate(gate);
+    }
+
+    /** 清空全部 Override 补丁并回落静态结果。 */
+    public static void clearOverridesNow() {
+        SecurityManager.clearOverrides();
+    }
+
+    /** 三层合并 + 全量推送（由内置策略注入静态配置后调用）。 */
+    public static void recomputeNow(Collection<Identifier> executorIds) {
+        SecurityManager.recompute(executorIds);
+    }
+
+    /** 取得全局 Override 上下文（修改器入口）。 */
+    public static SecurityContext getContextNow() {
+        return SecurityManager.getContext();
     }
 
     /** 缓冲的注入请求。 */

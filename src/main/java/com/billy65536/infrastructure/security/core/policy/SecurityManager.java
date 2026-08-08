@@ -112,8 +112,8 @@ public final class SecurityManager {
         executors.put(executor.getId(), executor);
     }
 
-    /** 设置覆盖门控（熔断定）。由宿主模块注入其配置开关的活引用。 */
-    public static void setOverrideGate(Supplier<Boolean> gate) {
+    /** 设置覆盖门控（熔断定）。由宿主模块经 {@link SecurityPortal#setGate} 注入其配置开关的活引用。 */
+    static void setOverrideGate(Supplier<Boolean> gate) {
         overrideGate = (gate == null) ? () -> true : gate;
     }
 
@@ -122,18 +122,18 @@ public final class SecurityManager {
         return overrideGate.get();
     }
 
-    /** 取得全局 Override 上下文（修改器入口）。 */
-    public static SecurityContext getContext() {
+    /** 取得全局 Override 上下文（修改器入口）。包级私有：仅框架内部经门户收口后访问。 */
+    static SecurityContext getContext() {
         return context;
     }
 
-    /** 登记一条补丁（由 {@link SecurityContext} / 补丁修改器的 {@code apply()} 调用）。 */
-    public static void submitPatch(SecurityConfigPatch patch) {
+    /** 登记一条补丁（由补丁修改器的 {@code apply()} 经 {@link RegistrationCoordinator#submitPatchNow} 收口后调用）。 */
+    static void submitPatch(SecurityConfigPatch patch) {
         context.submitPatch(patch);
     }
 
     /** 清空全部 Override 补丁，并使各执行器回落到静态合并结果。 */
-    public static void clearOverrides() {
+    static void clearOverrides() {
         context.clearPatches();
         recompute(new LinkedHashSet<>(executors.keySet()));
     }
@@ -184,14 +184,31 @@ public final class SecurityManager {
     }
 
     /**
-     * 设置策略激活态，并联动重算其下辖执行器配置。
+     * 受控入口：手动设置策略激活态。
      *
-     * <p>状态未变化直接返回（幂等）。变化后先更新激活集，再 {@link #recompute(Collection)}
-     * 推送新配置（此时锁定已落地），最后触发框架级事件——保证子事件晚于实际动作。</p>
+     * <p>对「不可手动开关」的策略（如服务端 opt-in），拒绝其<b>停用</b>请求，防止玩家或服务端指令
+     * 自行解除安全约束；仅允许由框架生命周期（连接 / 断连）经
+     * {@link #setActiveInternal(Identifier, boolean)} 操作。状态未变化直接返回（幂等）。</p>
      *
-     * @return true 表示状态确实变更，false 表示策略未注册或状态未变
+     * @return true 表示状态确实变更，false 表示策略未注册、状态未变或被标记为不可手动开关
      */
-    public static boolean setActive(Identifier policyId, boolean value) {
+    static boolean setActive(Identifier policyId, boolean value) {
+        ISecurityPolicy policy = policies.get(policyId);
+        if (policy != null && !policy.isManuallyToggleable() && !value) {
+            InfrastructureMod.LOGGER.warn(
+                    "拒绝手动停用受保护的安全策略 {}：该策略不可手动开关，仅可由框架生命周期控制", policyId);
+            return false;
+        }
+        return setActiveInternal(policyId, value);
+    }
+
+    /**
+     * 框架生命周期入口（连接 / 断连触发），<b>绕过</b>手动开关限制。
+     *
+     * <p>仅由框架内部经 {@link SecurityPortal#activatePolicyInternal} 收口后调用；不校验策略是否允许
+     * 手动开关，使断连时仍能正确释放锁定（回落静态结果）。</p>
+     */
+    static boolean setActiveInternal(Identifier policyId, boolean value) {
         ISecurityPolicy policy = policies.get(policyId);
         if (policy == null) {
             InfrastructureMod.LOGGER.warn(
@@ -236,7 +253,7 @@ public final class SecurityManager {
      *   <li>mergedCache 缓存 final，executor.onPolicyChanged(final)（异常隔离）。</li>
      * </ol>
      */
-    public static void recompute(Collection<Identifier> executorIds) {
+    static void recompute(Collection<Identifier> executorIds) {
         for (Identifier id : executorIds) {
             SecurityPolicyConfig base = null;
             for (ISecurityPolicy p : policies.values()) {

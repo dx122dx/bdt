@@ -60,11 +60,11 @@ class PolicyOverrideTest {
     @AfterEach
     void tearDown() {
         for (Identifier id : activated) {
-            SecurityManager.setActive(id, false);
+            SecurityPortal.activatePolicy(id, false);
         }
         activated.clear();
-        SecurityManager.setOverrideGate(null);
-        SecurityManager.clearOverrides();
+        SecurityPortal.setGate(null);
+        SecurityPortal.clearOverrides();
     }
 
     // ==================== 构造辅助 ====================
@@ -73,7 +73,7 @@ class PolicyOverrideTest {
     private MapPolicy registerActive(Identifier policyId, SecurityPolicyConfig... configs) {
         MapPolicy policy = new MapPolicy(policyId, List.of(configs));
         SecurityPortal.registerPolicy(reg -> reg.register(policy));
-        SecurityManager.setActive(policyId, true);
+        SecurityPortal.activatePolicy(policyId, true);
         activated.add(policyId);
         return policy;
     }
@@ -153,7 +153,7 @@ class PolicyOverrideTest {
             RecordingExecutor ex = registerExecutor(exId);
             registerActive(policyId, new MapConfig(exId, map("a", "1")));
 
-            SecurityManager.setActive(policyId, false);
+            SecurityPortal.activatePolicy(policyId, false);
 
             assertNull(lastOf(ex), "无激活策略贡献时执行器应收到 null（释放全部约束）");
             assertFalse(SecurityManager.isExecutorEnabled(exId));
@@ -174,7 +174,7 @@ class PolicyOverrideTest {
             RecordingExecutor ex = registerExecutor(exId);
             registerActive(policyId, new MapConfig(exId, map("keep", "0", "drop", "1")));
 
-            SecurityManager.submitPatch(
+            SecurityPortal.submitPolicyPatch(
                     new MapPatch(policyId, exId, map("added", "9"), Set.of("drop")));
 
             assertEquals(map("keep", "0", "added", "9"), lastOf(ex));
@@ -188,7 +188,7 @@ class PolicyOverrideTest {
             RecordingExecutor ex = registerExecutor(exId);
             registerActive(policyId, new MapConfig(exId, map("k", "base")));
 
-            SecurityManager.submitPatch(
+            SecurityPortal.submitPolicyPatch(
                     new MapPatch(policyId, exId, map("k", "patched"), Set.of("k")));
 
             assertEquals(Map.of(), lastOf(ex),
@@ -203,8 +203,8 @@ class PolicyOverrideTest {
             RecordingExecutor ex = registerExecutor(exId);
             registerActive(policyId, new MapConfig(exId, map("k", "base")));
 
-            SecurityManager.submitPatch(new MapPatch(policyId, exId, map("k", "first"), Set.of()));
-            SecurityManager.submitPatch(new MapPatch(policyId, exId, map("k", "second"), Set.of()));
+            SecurityPortal.submitPolicyPatch(new MapPatch(policyId, exId, map("k", "first"), Set.of()));
+            SecurityPortal.submitPolicyPatch(new MapPatch(policyId, exId, map("k", "second"), Set.of()));
 
             assertEquals(map("k", "second"), lastOf(ex));
         }
@@ -217,10 +217,10 @@ class PolicyOverrideTest {
             RecordingExecutor ex = registerExecutor(exId);
             registerActive(policyId, new MapConfig(exId, map("k", "base")));
 
-            SecurityManager.submitPatch(new MapPatch(policyId, exId, map(), Set.of("k")));
+            SecurityPortal.submitPolicyPatch(new MapPatch(policyId, exId, map(), Set.of("k")));
             assertEquals(Map.of(), lastOf(ex));
 
-            SecurityManager.submitPatch(new MapPatch(policyId, exId, map("k", "again"), Set.of()));
+            SecurityPortal.submitPolicyPatch(new MapPatch(policyId, exId, map("k", "again"), Set.of()));
             assertEquals(map("k", "again"), lastOf(ex));
         }
 
@@ -236,7 +236,7 @@ class PolicyOverrideTest {
                     new MapConfig(exA, map("k", "a")),
                     new MapConfig(exB, map("k", "b")));
 
-            SecurityManager.submitPatch(new MapPatch(policyId, exA, map("k", "patched"), Set.of()));
+            SecurityPortal.submitPolicyPatch(new MapPatch(policyId, exA, map("k", "patched"), Set.of()));
 
             assertEquals(map("k", "patched"), lastOf(a));
             assertEquals(map("k", "b"), lastOf(b), "其他执行器不应被波及");
@@ -250,13 +250,13 @@ class PolicyOverrideTest {
             RecordingExecutor ex = registerExecutor(exId);
             registerActive(policyId, new MapConfig(exId, map("k", "base")));
 
-            SecurityManager.submitPatch(new MapPatch(policyId, exId, map("k", "patched"), Set.of()));
+            SecurityPortal.submitPolicyPatch(new MapPatch(policyId, exId, map("k", "patched"), Set.of()));
             assertEquals(map("k", "patched"), lastOf(ex));
 
-            SecurityManager.clearOverrides();
+            SecurityPortal.clearOverrides();
 
             assertEquals(map("k", "base"), lastOf(ex));
-            assertEquals(0, SecurityManager.getContext().patchCount());
+            assertEquals(0, SecurityPortal.getContext().patchCount());
         }
 
         @Test
@@ -265,7 +265,7 @@ class PolicyOverrideTest {
             Identifier exId = nextId("executor");
             RecordingExecutor ex = registerExecutor(exId);
 
-            SecurityManager.submitPatch(
+            SecurityPortal.submitPolicyPatch(
                     new MapPatch(nextId("policy"), exId, map("k", "v"), Set.of()));
 
             assertNull(lastOf(ex), "base 为空时补丁无处叠加，执行器仍应收到 null");
@@ -287,11 +287,11 @@ class PolicyOverrideTest {
             RecordingExecutor ex = registerExecutor(exId);
             registerActive(policyId, new MapConfig(exId, map("k", "base")));
 
-            SecurityManager.submitPatch(new MapPatch(policyId, exId, map("k", "patched"), Set.of()));
+            SecurityPortal.submitPolicyPatch(new MapPatch(policyId, exId, map("k", "patched"), Set.of()));
             assertEquals(map("k", "patched"), lastOf(ex));
 
-            SecurityManager.setOverrideGate(() -> false);
-            SecurityManager.recompute(Set.of(exId));
+            SecurityPortal.setGate(() -> false);
+            SecurityPortal.recomputePolicies(Set.of(exId));
 
             assertEquals(map("k", "base"), lastOf(ex), "熔断后必须无视补丁");
             assertFalse(SecurityManager.isOverrideAllowed());
@@ -305,12 +305,12 @@ class PolicyOverrideTest {
             RecordingExecutor ex = registerExecutor(exId);
             registerActive(policyId, new MapConfig(exId, map("k", "base")));
 
-            SecurityManager.setOverrideGate(() -> false);
-            SecurityManager.submitPatch(new MapPatch(policyId, exId, map("k", "patched"), Set.of()));
+            SecurityPortal.setGate(() -> false);
+            SecurityPortal.submitPolicyPatch(new MapPatch(policyId, exId, map("k", "patched"), Set.of()));
             assertEquals(map("k", "base"), lastOf(ex));
 
-            SecurityManager.setOverrideGate(() -> true);
-            SecurityManager.recompute(Set.of(exId));
+            SecurityPortal.setGate(() -> true);
+            SecurityPortal.recomputePolicies(Set.of(exId));
 
             assertEquals(map("k", "patched"), lastOf(ex), "补丁未被丢弃，只是暂时不参与合并");
         }
@@ -318,8 +318,8 @@ class PolicyOverrideTest {
         @Test
         @DisplayName("门控为 null 时视为放行")
         void nullGate_shouldDefaultToAllow() {
-            SecurityManager.setOverrideGate(() -> false);
-            SecurityManager.setOverrideGate(null);
+            SecurityPortal.setGate(() -> false);
+            SecurityPortal.setGate(null);
             assertTrue(SecurityManager.isOverrideAllowed());
         }
     }
@@ -437,8 +437,8 @@ class PolicyOverrideTest {
             ConfigLockPatch.builder(patchPolicy, exId).add("mod:config/a.b", "true").apply();
             assertEquals(patchPolicy, ex.originOf("mod:config/a.b").getPrimary());
 
-            SecurityManager.setOverrideGate(() -> false);
-            SecurityManager.recompute(Set.of(exId));
+            SecurityPortal.setGate(() -> false);
+            SecurityPortal.recomputePolicies(Set.of(exId));
 
             assertEquals(staticPolicy, ex.originOf("mod:config/a.b").getPrimary(),
                     "熔断丢弃补丁后，来源不得残留补丁来源");

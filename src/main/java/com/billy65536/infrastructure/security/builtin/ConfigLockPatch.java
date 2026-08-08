@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.Set;
 
 import com.billy65536.infrastructure.security.core.policy.SecurityConfigPatch;
-import com.billy65536.infrastructure.security.core.policy.SecurityManager;
+import com.billy65536.infrastructure.security.core.policy.RegistrationCoordinator;
 
 import net.minecraft.util.Identifier;
 
@@ -91,7 +91,7 @@ public final class ConfigLockPatch implements SecurityConfigPatch {
 
         /** 构建补丁并提交给 Manager 触发重算。 */
         public void apply() {
-            SecurityManager.submitPatch(new ConfigLockPatch(policyId, executorId, adds, removes));
+            RegistrationCoordinator.submitPatchNow(new ConfigLockPatch(policyId, executorId, adds, removes));
         }
     }
 }

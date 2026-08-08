@@ -44,7 +44,7 @@ public final class SecurityManagerModule implements IModule {
      * <p>与宿主模组的 {@code mod_version} 解耦：模块的演进节奏与 infrastructure 整体发版
      * 无关，改动本模块时手工递增本常量即可，不再随模组元数据漂移。</p>
      */
-    private static final String VERSION = "20260808.1";
+    private static final String VERSION = "20260809.1";
 
     private SecurityConfig config = new SecurityConfig();
 
@@ -81,7 +81,7 @@ public final class SecurityManagerModule implements IModule {
 
         // 2) 覆盖门控读取本模块配置开关的活引用（锁定时字段被强制为 false）；
         //    必须早于 apply()，否则物化重算时门控尚未生效
-        SecurityManager.setOverrideGate(() -> config.allowPolicyOverride);
+        SecurityPortal.setGate(() -> config.allowPolicyOverride);
 
         // 3) 登记框架内置策略（即时生效）
         SecurityPortal.registerPolicy(reg -> reg.register(ServerOptinPolicy.INSTANCE));
@@ -108,7 +108,7 @@ public final class SecurityManagerModule implements IModule {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             applyTrigger(ActivationTrigger.MULTIPLAYER_JOIN, false);
             // 断连时丢弃所有外部覆盖补丁，回落静态合并结果
-            SecurityManager.clearOverrides();
+            SecurityPortal.clearOverrides();
         });
     }
 
@@ -133,7 +133,7 @@ public final class SecurityManagerModule implements IModule {
     private static void applyTrigger(ActivationTrigger trigger, boolean value) {
         for (ISecurityPolicy policy : SecurityManager.getAll()) {
             if (policy.getTrigger() == trigger) {
-                SecurityManager.setActive(policy.getId(), value);
+                SecurityPortal.activatePolicyInternal(policy.getId(), value);
             }
         }
     }

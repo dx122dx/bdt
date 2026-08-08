@@ -1,11 +1,17 @@
 package com.billy65536.infrastructure.security;
 
+import java.util.Collection;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
+
+import net.minecraft.util.Identifier;
 
 import com.billy65536.infrastructure.security.api.ConfigInjector;
 import com.billy65536.infrastructure.security.api.ExecutorRegistrar;
 import com.billy65536.infrastructure.security.api.PolicyRegistrar;
 import com.billy65536.infrastructure.security.core.policy.RegistrationCoordinator;
+import com.billy65536.infrastructure.security.core.policy.SecurityConfigPatch;
+import com.billy65536.infrastructure.security.core.policy.SecurityContext;
 
 /**
  * 安全框架对外的<b>唯一</b>注册门户。
@@ -79,5 +85,50 @@ public final class SecurityPortal {
      */
     static void apply() {
         RegistrationCoordinator.apply();
+    }
+
+    // ===== 受控写入口转发（包级私有：仅框架内部 SecurityManagerModule / SecurityCommands / 测试可触达） =====
+    // 外部模组不得触碰这些入口，激活态只能由框架生命周期驱动或被显式拒绝（不可手动开关的策略）。
+
+    /**
+     * 受控入口：手动激活 / 停用策略。
+     *
+     * <p>对不可手动开关的策略，停用请求会被 {@code SecurityManager} 拒绝；这正是
+     * 「Server-Optin 不得手动更改」的硬约束落点。</p>
+     */
+    static boolean activatePolicy(Identifier id, boolean value) {
+        return RegistrationCoordinator.setActiveNow(id, value);
+    }
+
+    /**
+     * 框架生命周期入口（连接 / 断连触发），绕过手动开关限制。
+     */
+    static boolean activatePolicyInternal(Identifier id, boolean value) {
+        return RegistrationCoordinator.setActiveInternalNow(id, value);
+    }
+
+    /** 登记一条 Override 补丁。 */
+    static void submitPolicyPatch(SecurityConfigPatch patch) {
+        RegistrationCoordinator.submitPatchNow(patch);
+    }
+
+    /** 设置覆盖门控（熔断定）。 */
+    static void setGate(Supplier<Boolean> gate) {
+        RegistrationCoordinator.setGateNow(gate);
+    }
+
+    /** 清空全部 Override 补丁并回落静态结果。 */
+    static void clearOverrides() {
+        RegistrationCoordinator.clearOverridesNow();
+    }
+
+    /** 三层合并 + 全量推送。 */
+    static void recomputePolicies(Collection<Identifier> executorIds) {
+        RegistrationCoordinator.recomputeNow(executorIds);
+    }
+
+    /** 取得全局 Override 上下文（修改器入口）。 */
+    static SecurityContext getContext() {
+        return RegistrationCoordinator.getContextNow();
     }
 }
